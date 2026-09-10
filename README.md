@@ -2,7 +2,8 @@
 
 Đồ án IoT — Otto + cảm biến bàn + Qwen.
 
-**Hợp đồng JSON (đọc trước khi code):** [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
+**Hợp đồng JSON (đọc trước khi code):** [`docs/PROTOCOL.md`](docs/PROTOCOL.md)  
+**Repo tham khảo (P2/P3 clone gì):** [`docs/NEED_REPOS.md`](docs/NEED_REPOS.md)
 
 Repo: https://github.com/thanhhale288/iot-jarvis
 
