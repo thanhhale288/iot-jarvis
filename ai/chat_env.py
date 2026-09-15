@@ -1,4 +1,4 @@
-"""AI Tuần 1: Ollama trường + tool get_environment → serial_bridge → Uno."""
+"""AI Tuần 2: Ollama trường + tools get_environment / set_relay / set_pump."""
 
 from __future__ import annotations
 
@@ -26,10 +26,9 @@ TOOLS = [
         "function": {
             "name": "get_environment",
             "description": (
-                "Đọc nhiệt độ (°C) và độ ẩm không khí (%) tại bàn làm việc "
-                "từ cảm biến DHT11 trên Arduino Uno. Luôn gọi tool này khi "
-                "người dùng hỏi nhiệt độ, độ ẩm, hoặc môi trường hiện tại. "
-                "Không được bịa số."
+                "Đọc nhiệt độ (°C), độ ẩm không khí (%), ánh sáng (ADC 0–1023) "
+                "và độ ẩm đất (ADC 0–1023; số lớn = khô hơn) từ Arduino Uno. "
+                "Gọi khi hỏi môi trường / nhiệt / ẩm / sáng / đất. Không bịa số."
             ),
             "parameters": {
                 "type": "object",
@@ -37,7 +36,55 @@ TOOLS = [
                 "required": [],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_relay",
+            "description": (
+                "Bật/tắt đèn (light) hoặc quạt (fan) qua relay/chân Uno. "
+                "Gọi khi người dùng yêu cầu bật/tắt đèn hoặc quạt."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "enum": ["light", "fan"],
+                        "description": "light = đèn, fan = quạt",
+                    },
+                    "on": {
+                        "type": "boolean",
+                        "description": "true = bật, false = tắt",
+                    },
+                },
+                "required": ["name", "on"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_pump",
+            "description": (
+                "Bật/tắt bơm tưới. Khi bật, seconds từ 1 đến 5 (mặc định 2); "
+                "hết giờ bơm tự tắt. Không tưới vô hạn."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "on": {"type": "boolean"},
+                    "seconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                        "description": "Thời gian tưới khi on=true",
+                    },
+                },
+                "required": ["on"],
+            },
+        },
+    },
 ]
 
 
@@ -54,15 +101,37 @@ def _chat(messages: list[dict[str, Any]], use_tools: bool = True) -> dict[str, A
     return r.json()
 
 
-def run_tool(name: str, bridge: SerialBridge) -> str:
+def _parse_args(fn: dict[str, Any]) -> dict[str, Any]:
+    raw = fn.get("arguments")
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def run_tool(name: str, args: dict[str, Any], bridge: SerialBridge) -> str:
     if name == "get_environment":
         data = bridge.get_env()
+        return json.dumps(data, ensure_ascii=False)
+    if name == "set_relay":
+        channel = str(args.get("name") or "")
+        on = bool(args.get("on"))
+        data = bridge.set_relay(channel, on)
+        return json.dumps(data, ensure_ascii=False)
+    if name == "set_pump":
+        on = bool(args.get("on"))
+        seconds = int(args.get("seconds") or 2)
+        data = bridge.set_pump(on, seconds)
         return json.dumps(data, ensure_ascii=False)
     return json.dumps({"ok": False, "error": f"unknown_tool:{name}"})
 
 
 def ask(user_text: str, bridge: SerialBridge | None = None) -> str:
-    """Hỏi AI; nếu model gọi tool thì đọc cảm biến rồi trả lời bằng số thật."""
+    """Hỏi AI; nếu model gọi tool thì điều khiển Uno rồi trả lời."""
     own_bridge = bridge is None
     if own_bridge:
         bridge = SerialBridge()
@@ -73,9 +142,11 @@ def ask(user_text: str, bridge: SerialBridge | None = None) -> str:
         {
             "role": "system",
             "content": (
-                "Bạn là Jarvis trên bàn học. Khi cần số liệu môi trường, "
-                "bắt buộc gọi tool get_environment. Trả lời tiếng Việt, ngắn gọn, "
-                "dùng đúng số từ tool."
+                "Bạn là Jarvis trên bàn học. "
+                "Cần số liệu môi trường → get_environment. "
+                "Bật/tắt đèn hoặc quạt → set_relay. "
+                "Tưới/bơm → set_pump (seconds 1–5). "
+                "Trả lời tiếng Việt, ngắn, đúng số/ACK từ tool."
             ),
         },
         {"role": "user", "content": user_text},
@@ -91,8 +162,9 @@ def ask(user_text: str, bridge: SerialBridge | None = None) -> str:
             for call in tool_calls:
                 fn = call.get("function") or {}
                 name = fn.get("name") or ""
-                print(f"[tool] {name}", flush=True)
-                result = run_tool(name, bridge)
+                args = _parse_args(fn)
+                print(f"[tool] {name} {args}", flush=True)
+                result = run_tool(name, args, bridge)
                 print(f"[tool_result] {result}", flush=True)
                 messages.append(
                     {
@@ -105,7 +177,7 @@ def ask(user_text: str, bridge: SerialBridge | None = None) -> str:
             final = (data2.get("message") or {}).get("content") or ""
             return final.strip()
 
-        # Fallback: model không gọi tool — tự đọc cảm biến rồi hỏi lại
+        # Fallback môi trường nếu model không gọi tool
         print("[tool] get_environment (fallback host)", flush=True)
         env = bridge.get_env()
         print(f"[tool_result] {json.dumps(env, ensure_ascii=False)}", flush=True)

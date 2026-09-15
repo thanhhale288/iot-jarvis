@@ -1,0 +1,43 @@
+BẢNG PHÂN CHIA NHIỆM VỤ DỰ ÁN ROBOT JARVIS,,,,,,,,,,,
+,,,,,,,,,,,
+TỔNG NHIỆM VỤ,CHƯA BẮT ĐẦU,ĐANG THỰC HIỆN,HOÀN THÀNH,GẶP SỰ CỐ,TIẾN ĐỘ DỰ ÁN,,PROPOSAL,,,,
+37,32,3,2,0,"5,4%",,,,,,
+,,,,,,,,,,,
+Mã Task,Deadline,Vị trí,Tên công việc / Hạng mục,Chi tiết thực hiện & Lưu ý kỹ thuật,Người nhận,Trạng thái,Tiêu chí hoàn thành (DoD),Link sản phẩm,,Vị trí,Họ và tên
+T01,14/9,P1,Khởi tạo dự án & Protocol,"Tạo GitHub repo, file docs/PROTOCOL.md chốt JSON contract giữa ESP32 và Uno; chốt cấu hình phát Hotspot từ Laptop.",Hề La (L),Hoàn thành,"Repo clone được, file JSON format chốt xong.",,,P1,Hề La (L)
+T02,,P2,Cài đặt môi trường ESP32 & Audio,"Cài PlatformIO/IDE, nạp code test Wi-Fi WebSocket; chạy thử STT local/Google ra text tiếng Việt.",Phan Anh,Đang thực hiện,ESP32 nhận JSON đổi màu NeoPixel; nói ra text.,,,P2,Phan Anh
+T03,,P3,Test cảm biến Uno & API AI,Nạp code đọc DHT11 qua Serial; test gọi API Qwen/Ollama; viết hàm tool calling get_environment.,Thọ,Hoàn thành,Bắn JSON nhiệt/ẩm lên máy; chat AI phản hồi.,,,P3,Thọ
+T04,,P4,Mua sắm linh kiện bổ sung,"Đặt mua khung Otto, 3 servo SG90/MG90S, nguồn 5V/2A rời; lập bảng tra cứu sơ đồ chân (Pinout).",Quan,Đang thực hiện,Có mã vận đơn hoặc nhận hàng; bảng pinout xong.,,,P4,Quan
+T05,,P5,Thiết lập quy trình kiểm thử,Lập file Google Sheet theo dõi bug và checklist kiểm thử theo tuần.,Mchang,Chưa bắt đầu,Bảng checklist sẵn sàng.,,,P5,Mchang
+T06,,P6,Khởi tạo khung báo cáo,"Tạo file Word chuẩn format Khoa CNTT - NEU (font, margin, header/footer, trang bìa, mục lục).",Diễm Thúy,Chưa bắt đầu,Khung Word chuẩn quy cách Khoa.,,,P6,Diễm Thúy
+T07,19/9,P1,Ghép nối Serial Bridge & Giám sát,Ghép cầu nối Python Serial điều khiển Uno; xử lý chống reset Uno khi mở cổng Serial; kiểm tra hàng P4.,Hề La (L),Chưa bắt đầu,Laptop bật/tắt relay qua text; linh kiện đủ.,,,Cả nhóm,Tất cả
+T08,,P2,"Cảm biến âm thanh, siêu âm & TTS","Lập trình ngắt vỗ tay (sound sensor), đọc mắt siêu âm, buzzer; chạy Edge-TTS phát âm thanh mẫu.",Phan Anh,Chưa bắt đầu,Vỗ tay nhận event; loa phát tiếng Việt mượt.,,,,
+T09,,P3,Mạch ngoại vi & Logic an toàn Uno,"Đọc LDR, độ ẩm đất, màn hình LCD; viết hàm kích Relay và Bơm mini có khống chế timeout/cooldown.",Thọ,Đang thực hiện,Lệnh text bật tắt relay và bơm tự ngắt sau 2s.,,,,
+T10,,P4,Lắp ráp Hub ngoại vi Uno,"Đấu nối Relay, bơm mini, LCD, DHT11 vào Uno; chụp ảnh sơ đồ nối dây (wiring diagram).",Quan,Chưa bắt đầu,Hub cắm gọn trên breadboard; có ảnh tư liệu.,,,,
+T11,,P5,Kiểm thử ngoại vi & kịch bản câu nói,Thử tải ngắt relay/bơm; tổng hợp danh sách câu thoại mẫu để test AI.,Mchang,Chưa bắt đầu,Bơm ngắt an toàn; list 20 câu test hoàn thành.,,,,
+T12,,P6,Viết Chương 1 & Sơ đồ khối,"Soạn thảo Mở đầu, Chương 1 (Tổng quan đề tài, cơ sở lý thuyết); vẽ sơ đồ kiến trúc 3 tầng.",Diễm Thúy,Chưa bắt đầu,Bản nháp Chương 1 hoàn thành.,,,,
+T13,24/9,P1,Hợp nhất MVP Jarvis (Mốc bảo vệ sớm),Ghép nối luồng end-to-end: Nói => Qwen =>Loa => Cử động Otto; quay clip demo nội bộ.,Hề La (L),Chưa bắt đầu,Demo thông suốt toàn bộ luồng chính.,,,,
+T14,,P2,Thư viện cử động Otto & Đồng bộ LED,"Lập trình gói cử chỉ Otto (nod, shake, happy, alert); đồng bộ hiệu ứng 5 trạng thái vòng NeoPixel.",Phan Anh,Chưa bắt đầu,Robot cử động mượt; LED đổi màu theo trạng thái.,,,,
+T15,,P3,Tự động hóa môi trường & Emotion Tool,Xây dựng logic đất khô tự tưới; viết tool calling express_emotion đẩy trạng thái sang P2.,Thọ,Chưa bắt đầu,Tự tưới cây khi đất khô; AI gọi cử chỉ robot.,,,,
+T16,,P4,Hoàn thiện cơ khí Otto đế cố định,"Lắp servo vào vỏ Otto, cân chỉnh góc $90^\circ$; nối chung Mass (Common GND) nguồn ngoài và ESP32.",Quan,Chưa bắt đầu,"Otto đứng vững, servo quay êm không co giật.",,,,
+T17,,P5,Đánh giá kiểm thử MVP,Chạy smoke test toàn hệ thống MVP; ghi nhận các lỗi giật servo hoặc trễ kết nối.,Mchang,Chưa bắt đầu,Bảng báo cáo kiểm thử MVP không có lỗi chặn.,,,,
+T18,,P6,Viết cấu trúc Chương 3,Thu thập hình ảnh sản phẩm từ P4; phác thảo Chương 3 (Thiết kế và cài đặt hệ thống).,Diễm Thúy,Chưa bắt đầu,Khung Chương 3 hoàn thành kèm ảnh thực tế.,,,,
+T19,29/9,P1,Kiểm tra tích hợp Remote & Proactive,Rà soát kịch bản điều khiển dự phòng qua Remote IR; kiểm tra luồng cảnh báo chủ động từ P3.,Hề La (L),Chưa bắt đầu,Điều khiển được toàn bộ thiết bị khi tắt mic.,,,,
+T20,,P2,Tối ưu âm thanh & Wake-word prototype,"Tích hợp Push-to-talk hoặc lọc nhiễu mic; làm thử nghiệm nhận diện từ khóa đánh thức ""Hey Jarvis"".",Phan Anh,Chưa bắt đầu,Đánh thức thử nghiệm thành công trong lab.,,,,
+T21,,P3,Cảnh báo chủ động & Giải mã Remote IR,Lập trình vòng lặp 60s kiểm tra ngưỡng cảm biến để tự nhắc nhở; nạp code đọc phím Remote IR trên Uno.,Thọ,Chưa bắt đầu,Tự nhắc khi vượt ngưỡng; bấm remote ăn lệnh.,,,,
+T22,,P4,Tối ưu hóa dây dẫn & Cố định bàn,Dùng ống xoắn bọc gọn bó dây; cố định chân đế Otto bằng băng keo xốp; bố trí mắt thu IR.,Quan,Chưa bắt đầu,"Bàn làm việc sạch dây, thẩm mỹ cao.",,,,
+T23,,P5,Đo đạc độ trễ & Thu thập dữ liệu,"Đo độ trễ phản hồi (Voice Latency, Serial Latency); kiểm tra 100% phím bấm remote.",Mchang,Chưa bắt đầu,Bảng số liệu độ trễ có đủ mẫu thực tế.,,,,
+T24,,P6,Soạn thảo Chương 2,"Tổng hợp nội dung kỹ thuật từ P2, P3 để hoàn thành Chương 2 (Công nghệ và Kiến trúc hệ thống).",Diễm Thúy,Chưa bắt đầu,Chương 2 hoàn chỉnh nội dung.,,,,
+T25,4/9,P1,Đóng băng kịch bản Demo,Chốt kịch bản demo 4 phút; quyết định loại bỏ tính năng đi bộ (gait) nếu chưa ổn định.,Hề La (L),Chưa bắt đầu,"Kịch bản demo cố định, không thêm tính năng.",,,,
+T26,,P2,Ổn định Wake-word & Cử động quay,"Hoàn thiện ""Hey Jarvis""; map cử động xoay trái/phải/lại gần; đóng gói module giọng nói.",Phan Anh,Chưa bắt đầu,"Gọi ""Hey Jarvis"" phản hồi tốt; nhận lệnh xoay.",,,,
+T27,,P3,Triển khai AI Fallback (Ollama Local),Cài đặt Ollama local trên laptop làm phương án B dự phòng phòng khi mạng lab sập.,Thọ,Chưa bắt đầu,Chuyển đổi sang Ollama chạy mượt khi ngắt mạng.,,,,
+T28,,P4,Tinh chỉnh cơ học & Gia cố,Kiểm tra độ rung lắc khi xoay; gia cố ốc vít và chân đế robot.,Quan,Chưa bắt đầu,"Robot chuyển động đầm, không rung lắc.",,,,
+T29,,P5,Đo độ chính xác Wake-word,Thực hiện đo kiểm thử đánh thức $\ge 20$ lần trong môi trường có tiếng ồn; tổng hợp tỷ lệ lỗi.,Mchang,Chưa bắt đầu,Tỷ lệ nhận diện wake-word $\ge 85\%$.,,,,
+T30,,P6,Soạn thảo Chương 4,"Đưa toàn bộ biểu đồ, bảng số liệu thử nghiệm từ P5 vào Chương 4 (Thực nghiệm và Đánh giá).",Diễm Thúy,Chưa bắt đầu,Chương 4 đầy đủ số liệu và biểu đồ.,,,,
+T31,10/10,P1,Đóng băng toàn diện (Code Freeze),Chỉ duyệt merge sửa lỗi nghiêm trọng (P0); duyệt bản nháp báo cáo toàn văn; tổ chức diễn tập.,Hề La (L),Chưa bắt đầu,Lỗi P0 bằng 0; quy trình chạy mượt.,,,,
+T32,,P2,Tối ưu độ bền kết nối (Hardening),Thêm cơ chế tự động kết nối lại Wi-Fi/WebSocket khi rớt mạng; hoàn thiện tài liệu hướng dẫn module.,Phan Anh,Chưa bắt đầu,ESP32 tự phục hồi kết nối trong 3 giây.,,,,
+T33,,P3,Độc lập hóa chế độ tự động Uno,Đảm bảo Uno tự tưới an toàn ngay cả khi rút cáp nối với laptop; hoàn thiện tài liệu API.,Thọ,Chưa bắt đầu,Rút cáp máy tính hệ thống cảm biến vẫn tự chạy.,,,,
+T34,,P4,Vệ sinh bàn demo & Chụp ảnh phụ lục,"Bố trí góc demo sạch đẹp; chụp toàn bộ ảnh linh kiện, góc máy để làm tài liệu phụ lục.",Quan,Chưa bắt đầu,Đầy đủ bộ ảnh sản phẩm thực tế độ nét cao.,,,,
+T35,,P5,Quay video Demo dự phòng,Quay 01 video chất lượng cao quay lại toàn bộ kịch bản demo 4 phút phòng khi hội đồng lỗi mạng.,Mchang,Chưa bắt đầu,File video demo hoàn chỉnh nộp cùng tài liệu.,,,,
+T36,,P6,Hoàn thiện bản thảo & Thiết kế Slide,"Hoàn tất toàn bộ các chương báo cáo, tài liệu tham khảo chuẩn IEEE; thiết kế bộ Slide bảo vệ.",Diễm Thúy,Chưa bắt đầu,Báo cáo hoàn chỉnh 100% và Slide sẵn sàng.,,,,
+T37,15/10,Cả nhóm,"Tuần đệm: Kiểm tra đạo văn, In ấn & Diễn tập","Chạy kiểm tra trùng lặp (Turnitin), in ấn đóng gáy mềm; toàn đội tập dượt thuyết trình và demo kịch bản.",Tất cả,Chưa bắt đầu,Báo cáo đã nộp; sẵn sàng bảo vệ hội đồng.,,,,
