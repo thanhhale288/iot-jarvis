@@ -5,15 +5,11 @@
 **Đóng** `arduino-cli monitor` trước (chỉ 1 chương trình dùng cổng).
 
 ```bash
-cd /Users/hale/Code/IOT
 source .venv/bin/activate
-cp -n .env.example .env   # nếu chưa có .env
-
 python -m serial_bridge
-# hoặc:
-python -m serial_bridge --port /dev/cu.usbserial-2110
+python -m serial_bridge --cmd relay --name light --on
+python -m serial_bridge --cmd pump --on --seconds 2
+python -m serial_bridge --test-cooldown
 ```
 
-Kỳ vọng in 1 dòng JSON có `temp` / `hum`.
-
-Test rút USB: rút → cắm lại → chạy lại lệnh trên.
+Port mặc định: `.env` → `UNO_PORT` (vd. `/dev/cu.usbserial-2110`).
