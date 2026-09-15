@@ -17,4 +17,9 @@ venv/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.iml
+
+# Agent working memory (planning-with-files / token-lean)
+.planning/
+scratch/
