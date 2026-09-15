@@ -65,7 +65,7 @@ Tuần 1 chọn **một** (P2 chốt, ghi README):
 
 - Baud **115200**, 8N1.
 - `serial_bridge` **mở cổng một lần rồi giữ**. Không open/close mỗi lệnh.
-- Sau `open`: **timeout đọc + delay ~2 giây** rồi mới gửi JSON. Uno reset vì DTR khi mở Serial; bỏ bước này là mất dòng JSON.
+- **Chống reset (T07):** khi `open`, đặt **DTR=false / RTS=false** (`dsrdtr=False`) để không kéo chân RESET. Vẫn **delay ~2 giây** sau open rồi mới gửi JSON (settle + fallback nếu driver vẫn pulse DTR). Bỏ delay khi board vẫn reset → mất dòng JSON đầu.
 - Host không gửi lệnh mới khi chưa nhận dòng trả (hoặc hết timeout).
 
 ### Nguồn servo (quy định B)
