@@ -1,19 +1,28 @@
 # serial_bridge — USB → Uno JSON (quy định C)
 
+Mở cổng **một lần**. Mặc định **tắt DTR/RTS** (chống reset Uno khi open), rồi delay settle (~2s).
+
 ## Chạy smoke
 
 **Đóng** `arduino-cli monitor` trước (chỉ 1 chương trình dùng cổng).
 
 ```bash
-cd /Users/hale/Code/IOT
 source .venv/bin/activate
-cp -n .env.example .env   # nếu chưa có .env
-
 python -m serial_bridge
-# hoặc:
-python -m serial_bridge --port /dev/cu.usbserial-2110
+python -m serial_bridge --cmd relay --name light --on
+python -m serial_bridge --cmd relay --name light --off
+python -m serial_bridge --cmd pump --on --seconds 2
+python -m serial_bridge --test-cooldown
 ```
 
-Kỳ vọng in 1 dòng JSON có `temp` / `hum`.
+## Text (T07 DoD)
 
-Test rút USB: rút → cắm lại → chạy lại lệnh trên.
+```bash
+python -m serial_bridge --text
+# > light on
+# > fan off
+# > env
+# > quit
+```
+
+Port: `.env` → `UNO_PORT`. Tắt chống reset (debug): `--allow-reset` hoặc `UNO_PREVENT_RESET=0`.
