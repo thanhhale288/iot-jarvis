@@ -70,7 +70,7 @@ Tuần 1 chọn **một** (P2 chốt, ghi README):
 
 ### Nguồn servo (quy định B)
 
-Servo **không** ăn 5V từ chân ESP32. Nguồn 5V ngoài ≥2A, **chung GND** với ESP32. Thiếu GND chung → giật / reset.
+Servo **không** ăn 5V từ chân ESP32. Nguồn 5V ngoài ≥3A, **chung GND** với ESP32. Thiếu GND chung → giật / reset. Pin map: [`esp32/README.md`](../esp32/README.md).
 
 ---
 
@@ -99,7 +99,7 @@ Chủ: P2 (`esp32/`).
 | `happy` | Vui |
 | `alert` | Cảnh báo |
 
-Tuần 1: nhận `led` → đổi màu/đèn. Chưa cần đúng màu cuối.
+Tuần 1: nhận `led` → đổi trạng thái mặt **TFT ST7789** (không NeoPixel). Mock màu/màn tạm được; enum `state` giữ nguyên.
 
 ### `motion`
 

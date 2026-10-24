@@ -40,15 +40,15 @@ Không đổi schema một mình. Không đưa JSON của ESP32 qua Serial Uno. 
 | LED + trở (giả quạt) | 34–36, 32 | P3 `uno/` | T09 | Quạt tuần 2 = LED, (+) qua trở → **D8** | `relay` `id:"fan"` |
 | L298 + bơm MB370 | 10, 23 | P3 `uno/` | T09, T15, T33 | IN1 → **D9**. `seconds` 1–5, mặc định 2. Hết giờ tự tắt. Cooldown 5s → `busy`. Nguồn bơm riêng, chung GND | `pump` |
 | Arduino Uno R3 | 1 | P3 `uno/` + `serial_bridge/` | T03, T07 | Serial **115200**. Bridge mở **một lần**, DTR/RTS false, delay ~2s. Không reset mỗi lệnh | Mọi lệnh `to:"uno"` |
-| NeoPixel 12 LED | 18 | P2 `esp32/` | T02, T14 | 5 trạng thái: idle, listening, thinking, speaking, happy, alert | `led` `state` |
-| Cảm biến âm thanh | 5 | P2 `esp32/` | T08 | Vỗ tay, digital + debounce | `event` `name:"clap"` |
-| Siêu âm SRF04 | 14 | P2 `esp32/` | T08 | Mắt khoảng cách gần. Chi tiết ở mục dưới | `event` `name:"proximity"` |
-| Buzzer 5V | 26 | P2 `esp32/` | T08 | Kêu local khi `clap` hoặc `proximity`. Không phải lệnh host | Không thêm `cmd` |
-| Servo SG90 | 24 | P2 `esp32/` | T14, T16, T26 | Otto: nod, shake, think, happy, alert; tuần 5 thêm turn_left, turn_right, step_forward. Kit 1 con; plan mua thêm (T04) cho ~3 servo. **5V ngoài ≥2A, chung GND**. Không đi bộ | `motion` `name` |
+| TFT ST7789 240×240 | (mua) | P2 `esp32/` | T02, T14 | Mặt cảm xúc Otto. 5 trạng thái: idle, listening, thinking, speaking, happy, alert. Pin: [`esp32/README.md`](../esp32/README.md) | `led` `state` (render TFT, **không** NeoPixel) |
+| Cảm biến âm thanh KY-037 | 5 | P2 `esp32/` | T08 | Vỗ tay, digital D0→**D35** + debounce | `event` `name:"clap"` |
+| Siêu âm HC-SR04 | 14 | P2 `esp32/` | T08 | Mắt khoảng cách gần. TRIG/ECHO qua level shifter → D4/D5. Chi tiết ở mục dưới | `event` `name:"proximity"` |
+| Buzzer 5V | 26 | P3 `uno/` | T08 / T10 | Cắm **ngoài hub Uno**, chân **D6** (+ transistor nếu cần). Beep local (ngưỡng / host sau). **Không** gắn ESP32 | Không thêm `cmd` |
+| Servo SG90 ×4 | 24 + mua | P2 `esp32/` | T14, T16, T26 | Otto: nod, shake, think, happy, alert; tuần 5 thêm turn_left, turn_right, step_forward. PWM D16/D13/D26/D14. **5V ngoài ≥3A, chung GND**. Không đi bộ | `motion` `name` |
 | Thu IR 1838 + remote | 20, 21 | P3 `uno/` | T21, T19 | Điều khiển khi tắt mic. Tuần 4 | `event` `name:"ir"` `code` |
 | Breadboard, dây, trở, LED rời | 31–41 | P4 / người đang cắm | T10 | Chỉ để nối các dòng **trong plan** | — |
 
-Pin Uno chi tiết: [`uno/README.md`](../uno/README.md). Pin ESP32 (siêu âm, mic, NeoPixel, servo) **chưa chốt trong repo** — ghi vào `esp32/README.md` khi cắm, không ghi vào PROTOCOL.
+Pin Uno: [`uno/README.md`](../uno/README.md). Pin ESP32 (TFT, siêu âm, mic, servo): [`esp32/README.md`](../esp32/README.md) — không ghi vào PROTOCOL.
 
 `speak_and_act` (tuần 3, P3 → host → P2): `text` tiếng Việt, `emotion` = enum `led.state`, `motion` = enum `motion.name`. Host đọc `to` rồi gửi đúng đường.
 
@@ -63,10 +63,11 @@ Có trong kit, **không** có task. Không thêm field JSON, không gắn “cho
 | Cảm biến mưa | 9 | Tưới theo **đất**, không theo mưa |
 | NE555 | 13 | Không tạo xung riêng |
 | 74HC595 | 15 | Không có tác vụ shift-register |
-| LED 7 đoạn (4 số và 1 số) | 16, 17 | Hiển thị = LCD, trạng thái = NeoPixel |
+| NeoPixel 12 LED | 18 | **Loại khỏi dự án** — trạng thái Otto = TFT ST7789 |
+| LED 7 đoạn (4 số và 1 số) | 16, 17 | Hiển thị = LCD, trạng thái = TFT |
 | LED matrix 8×8 | 19 | Plan không giao miệng ma trận |
 | Động cơ bước 28BYJ-48 | 22 | Otto dùng servo; không gait |
-| Pin 9V + jack | 25, 37 | Servo/bơm dùng nguồn 5V ngoài (T04), không nuôi servo từ pin 9V trên ESP32 |
+| Pin 9V + jack | 25, 37 | Servo/bơm dùng nguồn 5V ngoài ≥3A (T04), không nuôi servo từ pin 9V trên ESP32 |
 | Keypad 4×4 | 27 | Điều khiển = giọng nói + remote IR |
 | Nút nhấn + vỏ | 28, 29 | Không có nút trên bàn trong task |
 | Chiết áp B10K | 30 | Ngưỡng để trong code, không chỉnh bằng biến trở |
@@ -83,7 +84,7 @@ Làm **đúng** thế này:
 ```
 
 - Host nhận `proximity` rồi mới quyết định (tuần 3 có thể `speak_and_act` / `led` alert). Firmware mắt **không** tưới, không gọi Qwen.
-- Buzzer chỉ kêu local, cùng task T08.
+- Buzzer **không** trên ESP32 (đã chuyển Uno D6). Event `proximity` / `clap` vẫn từ ESP32; beep do Uno.
 
 Làm **sai** (dừng, dù user chỉ nói “làm siêu âm”):
 
