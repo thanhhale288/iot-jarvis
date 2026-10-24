@@ -9,9 +9,9 @@ Clone vào thư mục ngoài monorepo (vd. `~/Code/refs/`) hoặc submodule tùy
 
 ## Ai clone cái gì (tóm tắt)
 
-| Vai | Bắt buộc | Tùy chọn (TFT / wake) | Không clone |
-|-----|----------|------------------------|-------------|
-| **P2** (`esp32/`, `voice/`) | OttoDIYLib · openWakeWord · Whisper | Grobot_Animations (nếu mua TFT) · OttoDIY_ESP32 (chỉ xem pin) | xiaozhi-esp32 · JarvisNano · Beee · Pipecat |
+| Vai | Bắt buộc | Tùy chọn | Không clone |
+|-----|----------|-----------|-------------|
+| **P2** (`esp32/`, `voice/`) | OttoDIYLib · Grobot_Animations (TFT ST7789) · openWakeWord · Whisper | OttoDIY_ESP32 (chỉ xem pin) · RoboEyes backup | xiaozhi-esp32 · JarvisNano · Beee · Pipecat |
 | **P3** (`uno/`, `ai/`, `serial_bridge/`) | 1 repo tưới Uno · Ollama + Qwen tools | — | Smart-home ESP thay Uno · framework voice nặng |
 | **P1** | Đọc file này + PROTOCOL | — | Không ôm firmware |
 
@@ -38,13 +38,14 @@ git clone https://github.com/rhansenne/OttoDIY_ESP32.git
 - Lấy: map chân servo / Wi‑Fi boot.
 - **Không** lấy protocol Bluetooth/app; giữ `POST /cmd` (hoặc WebSocket) theo PROTOCOL.
 
-### 3. TFT emotion (chỉ khi đã mua màn)
+### 3. TFT emotion (bắt buộc — thay NeoPixel)
 
 ```bash
 git clone https://github.com/tanmaywankar/Grobot_Animations.git
 ```
 
-- ESP32 + `TFT_eSPI` (ST7789 / ILI9341 / ST7735).
+- ESP32 + `TFT_eSPI` hoặc Adafruit ST7789. Pin: [`esp32/README.md`](../esp32/README.md).
+- `cmd:led` / `emotion` → mắt TFT (**không** NeoPixel).
 - `setEmotion(...)` map với `led.state` / `emotion` trong PROTOCOL:
 
 | PROTOCOL `state` / `emotion` | Grobot (gợi ý) |
@@ -64,7 +65,7 @@ git clone https://github.com/yousseftechdev/RoboEyesTFT.git
 # hoặc ST7735: https://github.com/Shourov-Paul/AnimatedroboEye
 ```
 
-Màn nên mua: **ST7789 240×240 SPI ~1.3–1.54"** gắn **ESP32** (không gắn Uno). Logic 3.3V; servo vẫn nguồn ngoài + GND chung (quy định B).
+Màn: **ST7789 240×240 SPI ~1.3–1.54"** gắn **ESP32** (không gắn Uno). Logic 3.3V; servo 5V ngoài ≥3A + GND chung (quy định B). NeoPixel **loại khỏi dự án**.
 
 ### 4. Wake “Hey Jarvis” trên laptop (Tuần 5)
 
@@ -120,7 +121,7 @@ Cài qua Library Manager khi code firmware:
 |-----|----|------|
 | `ArduinoJson` | P2, P3 | Parse/serialize 1 dòng JSON |
 | `WebServer` / WiFi (ESP32 core) | P2 | `POST /cmd` |
-| `TFT_eSPI` | P2 | Chỉ khi có TFT |
+| `TFT_eSPI` hoặc Adafruit ST7789 | P2 | Mặt emotion (`led`) |
 | `ESP32Servo` hoặc Servo tương thích | P2 | Servo Otto |
 | `DHT sensor library` | P3 | DHT11 |
 | `LiquidCrystal` / I2C LCD | P3 | LCD 16×2 |
@@ -143,11 +144,11 @@ Clap: module **KY-037/038**, digital DO + debounce → `event: clap` — không 
 
 ## Thứ tự gợi ý (khớp hạn plan)
 
-1. **Tuần 1:** P2 OttoDIYLib + WebServer echo `led`/`ping` · P3 irrigation wiring + `get_env` + bridge delay 2s · STT 1 câu (Whisper).  
-2. **Tuần 2–3:** servo + GND · TTS · `speak_and_act` · (tùy) Grobot nếu đã có TFT.  
+1. **Tuần 1:** P2 OttoDIYLib + TFT smoke (`tft_test`) + WebServer echo `led`/`ping` · P3 irrigation + `get_env` + bridge delay 2s · STT 1 câu (Whisper).  
+2. **Tuần 2–3:** servo + GND · Grobot/`led`→TFT · TTS · `speak_and_act` · buzzer trên Uno.  
 3. **Tuần 5:** openWakeWord `hey_jarvis` · turn left/right.  
 
-MVP **24/09** không phụ thuộc TFT hay wake.
+MVP **24/09** cần TFT cho `led` (không còn NeoPixel); wake vẫn tùy tuần 5.
 
 ---
 
@@ -156,7 +157,7 @@ MVP **24/09** không phụ thuộc TFT hay wake.
 - [ ] P2: `OttoDIYLib`
 - [ ] P2: Whisper / faster-whisper (pip)
 - [ ] P2: `openWakeWord` (trước Tuần 5)
-- [ ] P2: `Grobot_Animations` (chỉ nếu mua ST7789)
+- [ ] P2: `Grobot_Animations` (ST7789 — bắt buộc, thay NeoPixel)
 - [ ] P3: Smart-Irrigation **hoặc** Smart-Plant-Watering
 - [ ] P3: Ollama + Qwen
 - [ ] P3: IRremote (Tuần 4)

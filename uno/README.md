@@ -52,6 +52,7 @@ Breadboard kiểu kit (GL No.12) thường thế này:
 | Relay               | 11    | IN → **D7**               |
 | LED fan tạm         | —     | (+) qua trở → **D8**      |
 | L298 → bơm          | 10+23 | IN1 → **D9** (xem Bước 6) |
+| **Buzzer 5V**       | 26    | Tín hiệu → **D6** (cắm ngoài hub; **không** ESP32) |
 
 
 Cổng Serial mẫu: `/dev/cu.usbserial-2110` (đổi `.env` → `UNO_PORT` nếu khác).
@@ -73,6 +74,7 @@ Cổng Serial mẫu: `/dev/cu.usbserial-2110` (đổi `.env` → `UNO_PORT` nế
 | 4   | Relay light         | +1 tín hiệu             | `--cmd relay --name light --on` |
 | 5   | LED fan D8          | +2 (LED+trở)            | `--cmd relay --name fan --on`   |
 | 6   | L298 + bơm          | dây riêng + nguồn ngoài | `--cmd pump --on --seconds 2`   |
+| 7   | Buzzer 5V (ngoài)   | +1 tín hiệu **D6**      | Beep local (không JSON `cmd`)   |
 
 
 Mỗi bước: **rút USB → cắm → cắm USB → chạy lệnh check → tick → bước sau.**
@@ -511,7 +513,21 @@ Bơm làm khi có adapter 5V và đã đọc hết mục Cấm.
 
 ---
 
+### Bước 7 — Buzzer 5V cắm ngoài (STT 26)
 
+**Chuyển từ ESP32:** không còn D25 / transistor trên Otto. Beep thuộc hub **Uno**.
+
+| Chân | → |
+|------|---|
+| Buzzer `(+)` | ray **`+`** (5V) — hoặc qua transistor nếu module thụ động cần |
+| Buzzer `(−)` / tín hiệu | Uno **D6** (active-high: HIGH = kêu; nếu ngược thì đảo) |
+| GND module (nếu có) | ray **`−`** |
+
+**Cấm:** nối buzzer vào ESP32. Không thêm `cmd` JSON — firmware Uno beep local (ngưỡng / sau khi host báo).
+
+Check tạm: sketch test `tone(6, …)` hoặc kéo D6 HIGH ~200ms → nghe tiếng.
+
+---
 
 ## 5. Smoke đầy đủ (sau Bước 3 trở lên)
 

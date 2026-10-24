@@ -19,7 +19,7 @@ cd iot-jarvis
 
 | Thư mục | Chủ | Việc |
 |---------|-----|------|
-| `esp32/` | P2 | Firmware Otto, LED, Wi‑Fi |
+| `esp32/` | P2 | Firmware Otto, TFT, Wi‑Fi — pin: [`esp32/README.md`](esp32/README.md) |
 | `voice/` | P2 | STT / TTS / wake |
 | `uno/` | P3 | Firmware DHT, relay, bơm |
 | `ai/` | P3 | Qwen, tools |
@@ -42,6 +42,6 @@ Laptop **phát Hotspot**. ESP32 join mạng đó — không dùng Wi‑Fi trư�
 
 ## Tuần 1
 
-P2: Wi‑Fi echo LED + STT 1 câu.  
+P2: Wi‑Fi echo `led`→TFT + STT 1 câu.  
 P3: DHT11 ra JSON sau khi rút/cắm USB.  
 P1: PROTOCOL đã ghi; 10/09 họp P2/P3 ký schema.

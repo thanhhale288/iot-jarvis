@@ -9,6 +9,7 @@ venv/
 
 # Arduino / PlatformIO
 .pio/
+**/build/
 *.elf
 *.bin
 *.hex
