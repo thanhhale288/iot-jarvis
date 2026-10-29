@@ -78,8 +78,8 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 
 | Bucket | Trạng thái |
 |--------|------------|
-| A (offline) | A1 ✅ A2 ✅ — tiếp A3 |
+| A (offline) | A1 ✅ A2 ✅ A3 ✅ — tiếp A4 |
 | B (có board) | phụ thuộc A1–A2 + hardware đã smoke |
 | C (sau MVP) | khóa đến khi B7–B8 ổn |
 
-**Next:** làm **A3** — AI tools gọi mock (`get_environment` / `set_relay` / `set_pump`).
+**Next:** làm **A4** — prompt Qwen → tool → JSON Uno (cần Ollama sống).

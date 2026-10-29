@@ -79,7 +79,11 @@ class MockUno:
         if cmd == "get_env":
             return _base(msg, "uno", True, **self.env)
         if cmd == "relay":
-            rid = msg.get("id")
+            # PROTOCOL ví dụ trùng key `id`; tool/Serial dùng `name` = light|fan
+            rid = msg.get("name")
+            if rid not in RELAY_IDS:
+                cand = msg.get("id")
+                rid = cand if cand in RELAY_IDS else rid
             on = msg.get("on")
             if rid not in RELAY_IDS or not isinstance(on, bool):
                 return _err(msg, "uno", "bad_args")
