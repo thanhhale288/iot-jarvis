@@ -14,14 +14,25 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 | A1 | Mock board Uno + ESP32 trả NDJSON mẫu | host / `tests/` hoặc module mock | `get_env`, ACK `led`/`motion`, lỗi `unknown_cmd` đúng phong bì |
 | A2 | Host router đọc `to` | host (skeleton) | `to:uno` ≠ `to:esp32`; không gửi JSON ESP32 qua Serial |
 | A3 | AI tools gọi mock | `ai/` | `get_environment` / `set_relay` / `set_pump` không cần Serial |
-| A4 | Prompt Qwen → tool → JSON Uno | `ai/` | Câu môi trường / đèn / tưới ra đúng lệnh PROTOCOL |
+| A4 | Prompt Qwen → tool → JSON Uno + **style trả lời** | `ai/` | Câu môi trường / đèn / tưới ra đúng lệnh PROTOCOL; system prompt chỉnh được giọng điệu Jarvis (ngắn, tiếng Việt, đúng số tool) — **cần Ollama sống** |
 | A5 | STT 1 câu (mic laptop) | `voice/` | Text tiếng Việt ra stdout/log |
-| A6 | TTS từ `text` (loa laptop) | `voice/` | Phát được câu mẫu |
-| A7 | Ghép `speak_and_act` phía host | host / `voice/` | Tách `emotion`→`led`, `motion`→`motion`, `text`→TTS |
+| A6 | TTS từ `text` (loa laptop) | `voice/` | Phát được câu mẫu. Engine: bắt đầu `edge-tts`/Piper; **clone giọng** qua [VoiceStudio](https://github.com/debpalash/voicestudio) (hoặc tương đương) là nâng cấp backend — API vẫn `text` → audio, không đổi PROTOCOL |
+| A6b | **Stream** LLM → TTS (giảm delay) | `ai/` + `voice/` | Ollama `stream=True`; cắt chunk/câu → TTS overlap **trong lúc** model còn gen; không đợi full text. Phụ thuộc A4 + A6. **Cần Ollama sống** |
+| A7 | Ghép `speak_and_act` phía host | host / `voice/` | Tách `emotion`→`led`, `motion`→`motion`, `text`→TTS (full text trước; sau đó có thể gắn A6b) |
 | A8 | Unit test enum + cooldown bơm | `tests/` | Enum khớp PROTOCOL; `pump` 1–5s; cooldown 5s → `busy` |
-| A9 | Checklist smoke 5 bước (mục 6 PROTOCOL) | `tests/` | Chạy được với mock, tick pass/fail |
+| A9 | Checklist smoke 5 bước (mục 6 PROTOCOL) | `tests/` | Chạy được với mock, tick pass/fail; bước AI/TTS stream đánh dấu riêng nếu Ollama chết |
 
-**Thứ tự A:** A1 → A2 → A3 → A4 → A5+A6 → A7 → A8 → A9.
+**Thứ tự A:** A1 → A2 → A3 → A4 → A5+A6 → **A6b** → A7 → A8 → A9.
+
+**Ollama sống bắt buộc:** A4, A6b (và phần AI trong A9). A5–A8 (trừ A6b) làm offline được.
+
+**Voice — tách việc (đừng gộp 1 task):**
+
+| Mong muốn | Task |
+|-----------|------|
+| Clone giọng người thật | A6 (engine) |
+| Fine-tune cách AI trả lời | A4 (prompt/style) |
+| Gen chữ → TTS nói sát cùng lúc | A6b (stream pipeline) |
 
 ---
 
@@ -35,7 +46,7 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 | B4 | Host: mock → bridge + Wi‑Fi thật | host | Cùng API A2, đổi transport |
 | B5 | AI tools → bridge thật | `ai/` | `python -m ai "…"` điều khiển Uno thật |
 | B6 | Event ESP32 | `esp32/` | `clap` (KY-037), `proximity` (HC-SR04); host nhận rồi quyết định |
-| B7 | E2E giọng → Otto | `voice/` + host + `esp32/` | STT → Qwen → TTS + `led`/`motion` trên robot |
+| B7 | E2E giọng → Otto | `voice/` + host + `esp32/` | STT → Qwen → TTS + `led`/`motion` trên robot; ưu tiên pipeline A6b nếu đã có |
 | B8 | Luật đất khô → tưới | host / `ai/` | Đọc `soil` → `pump` có hạn, không tưới vô hạn |
 
 **Thứ tự B:** B1+B2 → B3 → B4 → B5 → B6 → B7 → B8.
@@ -60,9 +71,11 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 |------|----------|
 | `esp32/otto_motion/` | `led`+`motion` → TFT + servo (thường còn Serial; B1 gắn Wi‑Fi) |
 | `serial_bridge/` | B3 / B5 |
-| `ai/` | A3–A4, B5 |
+| `ai/` | A3–A4, A6b, B5 |
+| `voice/` | A5–A6–A6b, A7, B7 |
 | `uno/get_env/` | Nền B2 |
 | `docs/MOTION_EMOTION_MAP.md` | A7 / B7 |
+| [VoiceStudio](https://github.com/debpalash/voicestudio) | Engine clone giọng cho A6 — không thay host/PROTOCOL |
 
 ---
 
@@ -71,6 +84,7 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 - Linh kiện **Ngoài plan** trong CONTEXT (NeoPixel, mưa, keypad, …).
 - Đổi schema PROTOCOL một mình.
 - Gait Otto đầy đủ / app Bluetooth Otto làm nền.
+- Thay cả stack bằng framework voice nặng (Pipecat, v.v.); VoiceStudio chỉ là **TTS engine** sau API `voice/`.
 
 ---
 
@@ -78,8 +92,9 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 
 | Bucket | Trạng thái |
 |--------|------------|
-| A (offline) | A1 ✅ A2 ✅ — tiếp A3 |
+| A (offline) | A1 ✅ A2 ✅ A3 ✅ A4 ✅ — tiếp A5/A6 (offline); A6b sau A6 |
 | B (có board) | phụ thuộc A1–A2 + hardware đã smoke |
 | C (sau MVP) | khóa đến khi B7–B8 ổn |
 
-**Next:** làm **A3** — AI tools gọi mock (`get_environment` / `set_relay` / `set_pump`).
+**Next (không cần Ollama):** **A5** STT hoặc **A6** TTS baseline.  
+**Next (cần Ollama, sau A6):** **A6b** stream LLM→TTS.
