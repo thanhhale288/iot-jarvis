@@ -1,6 +1,7 @@
-"""AI Tuần 2: Ollama trường + tools get_environment / set_relay / set_pump.
+"""AI Tuần 2: Ollama + tools get_environment / set_relay / set_pump.
 
-A3: mặc định backend mock (không Serial). Đặt AI_BACKEND=serial khi có Uno.
+A3: backend mock (không Serial). AI_BACKEND=serial khi có Uno.
+A4: system prompt Jarvis chỉnh được (AI_SYSTEM_PROMPT); cần Ollama sống.
 """
 
 from __future__ import annotations
@@ -19,9 +20,61 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "https://research.neu.edu.vn/ollama").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 AI_BACKEND = os.getenv("AI_BACKEND", "mock").strip().lower()
+
+# A4: giọng Jarvis — override bằng AI_SYSTEM_PROMPT trong .env (một dòng hoặc \\n)
+DEFAULT_SYSTEM_PROMPT = (
+    "Bạn là Jarvis trên bàn học — trợ lý ngắn gọn, tiếng Việt.\n"
+    "Luôn dùng tool khi cần số liệu hoặc điều khiển; không bịa số cảm biến, không bịa ACK.\n"
+    "- Hỏi nhiệt/ẩm/sáng/đất/môi trường → gọi get_environment, rồi trả lời đúng số trong JSON tool.\n"
+    "- Bật/tắt đèn → set_relay name=light; quạt → name=fan; on true/false.\n"
+    "- Tưới/bơm → set_pump on=true, seconds 1–5 (mặc định 2); không tưới vô hạn.\n"
+    "Một câu trả lời sau tool: ngắn, rõ việc đã làm hoặc số đo. Không giải thích dài."
+)
+
+_ENV_HINTS = (
+    "nhiệt",
+    "ẩm",
+    "đất",
+    "sáng",
+    "môi trường",
+    "temp",
+    "hum",
+    "soil",
+    "light",
+    "environment",
+    "độ ẩm",
+)
+_ACTION_HINTS = (
+    "bật",
+    "tắt",
+    "tưới",
+    "bơm",
+    "đèn",
+    "quạt",
+    "relay",
+    "pump",
+    "fan",
+)
+
+
+def system_prompt() -> str:
+    raw = os.getenv("AI_SYSTEM_PROMPT", "").strip()
+    if not raw:
+        return DEFAULT_SYSTEM_PROMPT
+    return raw.replace("\\n", "\n")
+
+
+def _looks_like_env(text: str) -> bool:
+    t = text.casefold()
+    return any(h in t for h in _ENV_HINTS)
+
+
+def _looks_like_action(text: str) -> bool:
+    t = text.casefold()
+    return any(h in t for h in _ACTION_HINTS)
 
 TOOLS = [
     {
@@ -223,67 +276,95 @@ def run_tool(name: str, args: dict[str, Any], backend: BoardBackend) -> str:
     return json.dumps({"ok": False, "error": f"unknown_tool:{name}"})
 
 
+def _run_tool_round(
+    messages: list[dict[str, Any]],
+    tool_calls: list[dict[str, Any]],
+    backend: BoardBackend,
+) -> None:
+    for call in tool_calls:
+        fn = call.get("function") or {}
+        name = fn.get("name") or ""
+        args = _parse_args(fn)
+        print(f"[tool] {name} {args}", flush=True)
+        result = run_tool(name, args, backend)
+        print(f"[tool_result] {result}", flush=True)
+        messages.append(
+            {
+                "role": "tool",
+                "tool_name": name,
+                "content": result,
+            }
+        )
+
+
 def ask(user_text: str, backend: BoardBackend | None = None) -> str:
-    """Hỏi AI; tool → mock hoặc Serial tùy backend."""
+    """Hỏi AI; tool → mock hoặc Serial tùy backend. A4: style qua system_prompt()."""
     own = backend is None
     if own:
         backend = make_backend()
     assert backend is not None
 
     messages: list[dict[str, Any]] = [
-        {
-            "role": "system",
-            "content": (
-                "Bạn là Jarvis trên bàn học. "
-                "Cần số liệu môi trường → get_environment. "
-                "Bật/tắt đèn hoặc quạt → set_relay. "
-                "Tưới/bơm → set_pump (seconds 1–5). "
-                "Trả lời tiếng Việt, ngắn, đúng số/ACK từ tool."
-            ),
-        },
+        {"role": "system", "content": system_prompt()},
         {"role": "user", "content": user_text},
     ]
 
     try:
-        data = _chat(messages, use_tools=True)
-        msg = data.get("message") or {}
-        tool_calls = msg.get("tool_calls") or []
-
-        if tool_calls:
+        used_tools = False
+        msg: dict[str, Any] = {}
+        for _round in range(3):
+            data = _chat(messages, use_tools=True)
+            msg = data.get("message") or {}
+            tool_calls = msg.get("tool_calls") or []
+            if not tool_calls:
+                break
+            used_tools = True
             messages.append(msg)
-            for call in tool_calls:
-                fn = call.get("function") or {}
-                name = fn.get("name") or ""
-                args = _parse_args(fn)
-                print(f"[tool] {name} {args}", flush=True)
-                result = run_tool(name, args, backend)
-                print(f"[tool_result] {result}", flush=True)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_name": name,
-                        "content": result,
-                    }
-                )
-            data2 = _chat(messages, use_tools=False)
-            final = (data2.get("message") or {}).get("content") or ""
-            return final.strip()
+            _run_tool_round(messages, tool_calls, backend)
 
-        # Fallback môi trường nếu model không gọi tool
-        print("[tool] get_environment (fallback host)", flush=True)
-        env = backend.get_env()
-        print(f"[tool_result] {json.dumps(env, ensure_ascii=False)}", flush=True)
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    f"Số liệu cảm biến thật (JSON): {json.dumps(env, ensure_ascii=False)}. "
-                    "Hãy trả lời câu hỏi trước đó bằng các số này, tiếng Việt, ngắn."
-                ),
-            }
-        )
-        data3 = _chat(messages, use_tools=False)
-        return ((data3.get("message") or {}).get("content") or "").strip()
+        if used_tools:
+            data2 = _chat(messages, use_tools=False)
+            return ((data2.get("message") or {}).get("content") or "").strip()
+
+        # Không có tool_calls: nudge một lần nếu rõ là action/env
+        if _looks_like_action(user_text) or _looks_like_env(user_text):
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Bắt buộc gọi đúng tool (get_environment / set_relay / set_pump). "
+                        "Không chỉ trả lời chữ."
+                    ),
+                }
+            )
+            data_n = _chat(messages, use_tools=True)
+            msg_n = data_n.get("message") or {}
+            calls_n = msg_n.get("tool_calls") or []
+            if calls_n:
+                messages.append(msg_n)
+                _run_tool_round(messages, calls_n, backend)
+                data2 = _chat(messages, use_tools=False)
+                return ((data2.get("message") or {}).get("content") or "").strip()
+
+        # Fallback get_env chỉ khi câu hỏi môi trường
+        if _looks_like_env(user_text):
+            print("[tool] get_environment (fallback host)", flush=True)
+            env = backend.get_env()
+            print(f"[tool_result] {json.dumps(env, ensure_ascii=False)}", flush=True)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Số liệu cảm biến thật (JSON): {json.dumps(env, ensure_ascii=False)}. "
+                        "Trả lời câu hỏi trước bằng các số này, tiếng Việt, ngắn."
+                    ),
+                }
+            )
+            data3 = _chat(messages, use_tools=False)
+            return ((data3.get("message") or {}).get("content") or "").strip()
+
+        content = (msg.get("content") or "").strip()
+        return content
     finally:
         if own:
             backend.close()
@@ -298,6 +379,8 @@ def main() -> int:
     print(f"OLLAMA_HOST={OLLAMA_HOST}")
     print(f"OLLAMA_MODEL={OLLAMA_MODEL}")
     print(f"AI_BACKEND={AI_BACKEND}")
+    style = os.getenv("AI_SYSTEM_PROMPT", "").strip()
+    print(f"AI_SYSTEM_PROMPT={'custom' if style else 'default'}")
     print(f"user: {prompt}")
     try:
         answer = ask(prompt)
