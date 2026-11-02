@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import uuid
+from collections.abc import Iterator
 from typing import Any, Protocol
 
 import requests
@@ -26,12 +28,15 @@ AI_BACKEND = os.getenv("AI_BACKEND", "mock").strip().lower()
 
 # A4: giọng Jarvis — override bằng AI_SYSTEM_PROMPT trong .env (một dòng hoặc \\n)
 DEFAULT_SYSTEM_PROMPT = (
-    "Bạn là Jarvis trên bàn học — trợ lý ngắn gọn, tiếng Việt.\n"
+    "Bạn là Jarvis trên bàn học — nói chuyện bằng tiếng Việt, một câu ngắn.\n"
+    "Câu trả lời sẽ được đọc thành tiếng (TTS): viết đúng như sẽ nói, không markdown, "
+    "không ký hiệu (°C viết thành 'độ C', % thành 'phần trăm'), không tiếng Anh thừa.\n"
     "Luôn dùng tool khi cần số liệu hoặc điều khiển; không bịa số cảm biến, không bịa ACK.\n"
-    "- Hỏi nhiệt/ẩm/sáng/đất/môi trường → gọi get_environment, rồi trả lời đúng số trong JSON tool.\n"
+    "- Hỏi nhiệt/ẩm/sáng/đất/môi trường → get_environment, rồi nói đúng số từ JSON.\n"
     "- Bật/tắt đèn → set_relay name=light; quạt → name=fan; on true/false.\n"
     "- Tưới/bơm → set_pump on=true, seconds 1–5 (mặc định 2); không tưới vô hạn.\n"
-    "Một câu trả lời sau tool: ngắn, rõ việc đã làm hoặc số đo. Không giải thích dài."
+    "Ví dụ giọng: 'Nhiệt độ hai mươi tám phẩy bốn độ C, độ ẩm sáu mốt phần trăm.' "
+    "hoặc 'Đã bật đèn.'"
 )
 
 _ENV_HINTS = (
@@ -247,6 +252,59 @@ def _chat(messages: list[dict[str, Any]], use_tools: bool = True) -> dict[str, A
     return r.json()
 
 
+def _chat_token_stream(
+    messages: list[dict[str, Any]],
+) -> Iterator[str]:
+    """A6b: Ollama stream=True — yield từng mảnh content (không tools)."""
+    body: dict[str, Any] = {
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "stream": True,
+    }
+    with requests.post(
+        f"{OLLAMA_HOST}/api/chat", json=body, timeout=120, stream=True
+    ) as r:
+        r.raise_for_status()
+        for line in r.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            try:
+                chunk = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            part = ((chunk.get("message") or {}).get("content")) or ""
+            if part:
+                yield part
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?…。！？\n])\s+")
+
+
+def iter_sentences_from_tokens(tokens: Iterator[str]) -> Iterator[str]:
+    """Gom token → cắt câu để TTS sớm (A6b)."""
+    buf = ""
+    for tok in tokens:
+        buf += tok
+        while True:
+            m = _SENTENCE_END.search(buf)
+            if not m:
+                # Câu ngắn không dấu: cắt khi đủ dài + khoảng trắng
+                if len(buf) >= 48 and " " in buf[20:]:
+                    cut = buf.rfind(" ", 0, 64)
+                    if cut > 12:
+                        yield buf[:cut].strip()
+                        buf = buf[cut + 1 :]
+                        continue
+                break
+            sentence = buf[: m.start()].strip()
+            buf = buf[m.end() :]
+            if sentence:
+                yield sentence
+    tail = buf.strip()
+    if tail:
+        yield tail
+
+
 def _parse_args(fn: dict[str, Any]) -> dict[str, Any]:
     raw = fn.get("arguments")
     if isinstance(raw, dict):
@@ -261,7 +319,11 @@ def _parse_args(fn: dict[str, Any]) -> dict[str, Any]:
 
 def run_tool(name: str, args: dict[str, Any], backend: BoardBackend) -> str:
     if name == "get_environment":
-        data = backend.get_env()
+        from ai.fast_path import get_environment_cached
+
+        data, hit = get_environment_cached(backend.get_env)
+        if hit:
+            print("[tool] get_environment (cache hit)", flush=True)
         return json.dumps(data, ensure_ascii=False)
     if name == "set_relay":
         channel = str(args.get("name") or "")
@@ -297,75 +359,139 @@ def _run_tool_round(
         )
 
 
+def _prepare_messages(
+    user_text: str, backend: BoardBackend
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Chạy tool rounds (blocking). Trả (messages sẵn stream, content sớm nếu có)."""
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_prompt()},
+        {"role": "user", "content": user_text},
+    ]
+    used_tools = False
+    msg: dict[str, Any] = {}
+    for _round in range(3):
+        data = _chat(messages, use_tools=True)
+        msg = data.get("message") or {}
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            break
+        used_tools = True
+        messages.append(msg)
+        _run_tool_round(messages, tool_calls, backend)
+
+    if used_tools:
+        return messages, None
+
+    if _looks_like_action(user_text) or _looks_like_env(user_text):
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Bắt buộc gọi đúng tool (get_environment / set_relay / set_pump). "
+                    "Không chỉ trả lời chữ."
+                ),
+            }
+        )
+        data_n = _chat(messages, use_tools=True)
+        msg_n = data_n.get("message") or {}
+        calls_n = msg_n.get("tool_calls") or []
+        if calls_n:
+            messages.append(msg_n)
+            _run_tool_round(messages, calls_n, backend)
+            return messages, None
+
+    if _looks_like_env(user_text):
+        print("[tool] get_environment (fallback host)", flush=True)
+        env = backend.get_env()
+        print(f"[tool_result] {json.dumps(env, ensure_ascii=False)}", flush=True)
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Số liệu cảm biến thật (JSON): {json.dumps(env, ensure_ascii=False)}. "
+                    "Trả lời câu hỏi trước bằng các số này, tiếng Việt, ngắn."
+                ),
+            }
+        )
+        return messages, None
+
+    early = (msg.get("content") or "").strip()
+    return messages, early or None
+
+
 def ask(user_text: str, backend: BoardBackend | None = None) -> str:
     """Hỏi AI; tool → mock hoặc Serial tùy backend. A4: style qua system_prompt()."""
+    return " ".join(ask_sentences(user_text, backend=backend)).strip()
+
+
+def ask_sentences(
+    user_text: str, backend: BoardBackend | None = None
+) -> Iterator[str]:
+    """A6b: sau tool (nếu có), stream câu trả lời — TTS overlap được."""
+    import time
+
+    from ai.fast_path import LAST_ASK_STATS, reset_stats, try_fast_reply
+
     own = backend is None
     if own:
         backend = make_backend()
     assert backend is not None
 
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt()},
-        {"role": "user", "content": user_text},
-    ]
-
+    stats = reset_stats()
+    t0 = time.time()
     try:
-        used_tools = False
-        msg: dict[str, Any] = {}
-        for _round in range(3):
-            data = _chat(messages, use_tools=True)
-            msg = data.get("message") or {}
-            tool_calls = msg.get("tool_calls") or []
-            if not tool_calls:
-                break
-            used_tools = True
-            messages.append(msg)
-            _run_tool_round(messages, tool_calls, backend)
-
-        if used_tools:
-            data2 = _chat(messages, use_tools=False)
-            return ((data2.get("message") or {}).get("content") or "").strip()
-
-        # Không có tool_calls: nudge một lần nếu rõ là action/env
-        if _looks_like_action(user_text) or _looks_like_env(user_text):
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "Bắt buộc gọi đúng tool (get_environment / set_relay / set_pump). "
-                        "Không chỉ trả lời chữ."
-                    ),
-                }
+        # Fast path: lệnh cứng / env — không Ollama
+        fast = try_fast_reply(
+            user_text,
+            set_relay=backend.set_relay,
+            set_pump=backend.set_pump,
+            get_env=backend.get_env,
+        )
+        if fast:
+            stats.path = "fast"
+            stats.cache_hit = LAST_ASK_STATS.cache_hit
+            stats.tool_s = time.time() - t0
+            stats.first_token_s = stats.tool_s
+            print(
+                f"[ask] path=fast tool_s={stats.tool_s:.3f}s "
+                f"cache_hit={stats.cache_hit}",
+                flush=True,
             )
-            data_n = _chat(messages, use_tools=True)
-            msg_n = data_n.get("message") or {}
-            calls_n = msg_n.get("tool_calls") or []
-            if calls_n:
-                messages.append(msg_n)
-                _run_tool_round(messages, calls_n, backend)
-                data2 = _chat(messages, use_tools=False)
-                return ((data2.get("message") or {}).get("content") or "").strip()
+            yield fast
+            return
 
-        # Fallback get_env chỉ khi câu hỏi môi trường
-        if _looks_like_env(user_text):
-            print("[tool] get_environment (fallback host)", flush=True)
-            env = backend.get_env()
-            print(f"[tool_result] {json.dumps(env, ensure_ascii=False)}", flush=True)
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        f"Số liệu cảm biến thật (JSON): {json.dumps(env, ensure_ascii=False)}. "
-                        "Trả lời câu hỏi trước bằng các số này, tiếng Việt, ngắn."
-                    ),
-                }
-            )
-            data3 = _chat(messages, use_tools=False)
-            return ((data3.get("message") or {}).get("content") or "").strip()
+        stats.path = "llm"
+        t_tools = time.time()
+        messages, early = _prepare_messages(user_text, backend)
+        stats.tool_s = time.time() - t_tools
 
-        content = (msg.get("content") or "").strip()
-        return content
+        def _mark_first() -> Iterator[str]:
+            first = True
+            # Lượt đầu đã có chữ, không tool → không gọi model lần nữa
+            src: Iterator[str]
+            if early and len(messages) == 2:
+                src = iter_sentences_from_tokens(iter([early]))
+            else:
+                src = iter_sentences_from_tokens(_chat_token_stream(messages))
+            for sent in src:
+                if first:
+                    stats.first_token_s = time.time() - t0
+                    print(
+                        f"[ask] path=llm tool_s={stats.tool_s:.3f}s "
+                        f"first_token_s={stats.first_token_s:.3f}s",
+                        flush=True,
+                    )
+                    first = False
+                yield sent
+
+        yield from _mark_first()
     finally:
+        stats.total_s = time.time() - t0
+        LAST_ASK_STATS.path = stats.path
+        LAST_ASK_STATS.tool_s = stats.tool_s
+        LAST_ASK_STATS.first_token_s = stats.first_token_s
+        LAST_ASK_STATS.total_s = stats.total_s
+        LAST_ASK_STATS.cache_hit = stats.cache_hit
         if own:
             backend.close()
 

@@ -1,0 +1,7 @@
+faster-whisper>=1.1.0,<2
+av>=11,<14
+sounddevice>=0.5.0
+numpy>=1.26.0
+python-dotenv>=1.0.0
+gradio>=4.44.0,<6
+edge-tts>=6.1.0
