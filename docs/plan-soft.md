@@ -92,9 +92,9 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 
 | Bucket | Trạng thái |
 |--------|------------|
-| A (offline) | A1 ✅ A2 ✅ A3 ✅ A4 ✅ — tiếp A5/A6 (offline); A6b sau A6 |
+| A (offline) | A1 ✅ A2 ✅ A3 ✅ A4 ✅ A5 ✅ A6 ✅ A6b ✅ — tiếp A7 / A8 |
 | B (có board) | phụ thuộc A1–A2 + hardware đã smoke |
 | C (sau MVP) | khóa đến khi B7–B8 ổn |
 
-**Next (không cần Ollama):** **A5** STT hoặc **A6** TTS baseline.  
-**Next (cần Ollama, sau A6):** **A6b** stream LLM→TTS.
+**Next:** **A7** `speak_and_act` hoặc **A8** unit test enum/cooldown.  
+**Latency:** `python -m voice.pipeline` / UI — xem `time-to-first-speech`.
