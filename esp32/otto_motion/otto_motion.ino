@@ -5,7 +5,9 @@
  * Không KY-037 / HC-SR04 (ngoài plan).
  *
  * HTTP POST /cmd  body = 1 JSON → response 1 JSON
- * Serial 115200: cùng JSON / lệnh text (debug)
+ * Serial 115200: JSON hoặc text debug
+ *   forward | backward | left | right | tien | lui | trai | phai | happy
+ * FOOT_H=30°. Khong playGesture (can LED matrix).
  */
 
 #include <WiFi.h>
@@ -96,6 +98,18 @@ static void applyFace(const Face *f) {
   Serial.printf("face=%s\n", f->label);
 }
 
+// Plain-text + JSON motion names share one face key.
+static const char *faceKeyFor(const char *key) {
+  if (strcmp(key, "forward") == 0 || strcmp(key, "tien") == 0 ||
+      strcmp(key, "backward") == 0 || strcmp(key, "lui") == 0 ||
+      strcmp(key, "step_back") == 0) {
+    return "step_forward";
+  }
+  if (strcmp(key, "left") == 0 || strcmp(key, "trai") == 0) return "turn_left";
+  if (strcmp(key, "right") == 0 || strcmp(key, "phai") == 0) return "turn_right";
+  return key;
+}
+
 static const char *emotionToMotion(const char *emotion) {
   if (!emotion || !emotion[0]) return nullptr;
   if (strcmp(emotion, "idle") == 0) return "idle";
@@ -149,8 +163,26 @@ static bool runMotion(const char *name) {
     Otto.home();
     return true;
   }
-  if (strcmp(name, "step_forward") == 0) {
-    Otto.walk(2, 1000, FORWARD);
+  // 4 servos: walk/turn set hip amp 30 and foot amp 40 (Otto.cpp).
+  if (strcmp(name, "forward") == 0 || strcmp(name, "tien") == 0 ||
+      strcmp(name, "step_forward") == 0) {
+    Otto.walk(3, 1000, FORWARD);
+    Otto.home();
+    return true;
+  }
+  if (strcmp(name, "backward") == 0 || strcmp(name, "lui") == 0 ||
+      strcmp(name, "step_back") == 0) {
+    Otto.walk(3, 1000, BACKWARD);
+    Otto.home();
+    return true;
+  }
+  if (strcmp(name, "left") == 0 || strcmp(name, "trai") == 0) {
+    Otto.turn(3, 1000, LEFT);
+    Otto.home();
+    return true;
+  }
+  if (strcmp(name, "right") == 0 || strcmp(name, "phai") == 0) {
+    Otto.turn(3, 1000, RIGHT);
     Otto.home();
     return true;
   }
@@ -158,7 +190,7 @@ static bool runMotion(const char *name) {
 }
 
 static bool act(const char *key) {
-  const Face *f = findFace(key);
+  const Face *f = findFace(faceKeyFor(key));
   if (f) applyFace(f);
 
   const char *motion = key;
@@ -339,11 +371,13 @@ void setup() {
   canvas.createSprite(240, 120);
 
   Otto.init(LeftLeg, RightLeg, LeftFoot, RightFoot, false, BuzzerPin);
+  // CP trim: 1654 us ≈ +14° so Otto 90° matches the horn
+  Otto.setTrims(0, 14, 0, 0);  // YL CT, YR CP, RL BT, RR BP
   Otto.home();
 
   applyFace(findFace("idle"));
   connectWifi();
-  Serial.println("ready — Serial JSON hoặc POST /cmd");
+  Serial.println("ready — Serial JSON / POST /cmd / forward|left|…");
 }
 
 void loop() {
