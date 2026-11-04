@@ -69,12 +69,35 @@ class MockEsp32:
 
 
 class MockUno:
-    """get_env mẫu; relay/pump khóa tên; lệnh lạ → unknown_cmd."""
+    """get_env mẫu; relay/pump khóa tên; cooldown bơm 5s → busy (A8)."""
 
-    def __init__(self, env: dict[str, Any] | None = None) -> None:
+    PUMP_COOLDOWN_S = 5.0
+
+    def __init__(
+        self,
+        env: dict[str, Any] | None = None,
+        *,
+        clock: Any | None = None,
+        cooldown_s: float = PUMP_COOLDOWN_S,
+    ) -> None:
+        import time
+
         self.env = dict(env or SAMPLE_ENV)
+        self._now = clock or time.monotonic
+        self.cooldown_s = float(cooldown_s)
+        self.pump_on = False
+        self.pump_off_at = 0.0
+        self.cooldown_until = 0.0
+
+    def _service_pump(self) -> None:
+        now = float(self._now())
+        if self.pump_on and now >= self.pump_off_at:
+            self.pump_on = False
+            self.pump_off_at = 0.0
+            self.cooldown_until = now + self.cooldown_s
 
     def handle(self, msg: dict[str, Any]) -> dict[str, Any]:
+        self._service_pump()
         cmd = msg.get("cmd")
         if cmd == "get_env":
             return _base(msg, "uno", True, **self.env)
@@ -95,6 +118,18 @@ class MockUno:
             seconds = msg.get("seconds", 2)
             if not isinstance(seconds, int) or seconds < 1 or seconds > 5:
                 return _err(msg, "uno", "bad_args")
+            now = float(self._now())
+            if on:
+                if self.pump_on or now < self.cooldown_until:
+                    return _err(msg, "uno", "busy")
+                self.pump_on = True
+                self.pump_off_at = now + float(seconds)
+            else:
+                was_on = self.pump_on
+                self.pump_on = False
+                self.pump_off_at = 0.0
+                if was_on:
+                    self.cooldown_until = now + self.cooldown_s
             return _base(msg, "uno", True, on=on, seconds=seconds)
         return _err(msg, "uno", "unknown_cmd")
 

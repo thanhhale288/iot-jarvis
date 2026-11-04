@@ -208,7 +208,7 @@ class MockBoardBackend:
 
 
 class SerialBoardBackend:
-    """B5 / có board: bọc SerialBridge."""
+    """B5 / có board: bọc SerialBridge (chỉ Uno)."""
 
     def __init__(self, bridge: Any | None = None) -> None:
         from serial_bridge import SerialBridge
@@ -232,10 +232,56 @@ class SerialBoardBackend:
             self.bridge.close()
 
 
+class RouterBoardBackend:
+    """B4/B5: tools → HostRouter (mock / serial / real)."""
+
+    def __init__(self, router: Any | None = None) -> None:
+        from host.router import make_router_from_env
+
+        self.router = router or make_router_from_env()
+        self._uno_close = getattr(self.router.uno, "close", None)
+
+    def get_env(self) -> dict[str, Any]:
+        return self.router.dispatch(
+            {"v": 1, "id": _new_id(), "to": "uno", "cmd": "get_env"}
+        )
+
+    def set_relay(self, name: str, on: bool) -> dict[str, Any]:
+        return self.router.dispatch(
+            {
+                "v": 1,
+                "id": _new_id(),
+                "to": "uno",
+                "cmd": "relay",
+                "name": name,
+                "on": on,
+            }
+        )
+
+    def set_pump(self, on: bool, seconds: int = 2) -> dict[str, Any]:
+        sec = max(1, min(5, int(seconds)))
+        return self.router.dispatch(
+            {
+                "v": 1,
+                "id": _new_id(),
+                "to": "uno",
+                "cmd": "pump",
+                "on": on,
+                "seconds": sec,
+            }
+        )
+
+    def close(self) -> None:
+        if callable(self._uno_close):
+            self._uno_close()
+
+
 def make_backend(kind: str | None = None) -> BoardBackend:
     mode = (kind or AI_BACKEND or "mock").strip().lower()
     if mode in ("serial", "uno", "bridge"):
         return SerialBoardBackend()
+    if mode in ("real", "board", "hw", "router"):
+        return RouterBoardBackend()
     return MockBoardBackend()
 
 
@@ -324,6 +370,22 @@ def run_tool(name: str, args: dict[str, Any], backend: BoardBackend) -> str:
         data, hit = get_environment_cached(backend.get_env)
         if hit:
             print("[tool] get_environment (cache hit)", flush=True)
+        # B8: đất khô → tưới có hạn (SOIL_AUTO_WATER=1)
+        auto = os.getenv("SOIL_AUTO_WATER", "0").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "",
+        )
+        if auto and data.get("ok"):
+            router = getattr(backend, "router", None)
+            if router is not None:
+                from host.soil import maybe_water_if_dry
+
+                water = maybe_water_if_dry(router, data)
+                if water.get("action") == "pump":
+                    data = {**data, "auto_water": water}
+                    print(f"[soil] auto pump {water.get('seconds')}s", flush=True)
         return json.dumps(data, ensure_ascii=False)
     if name == "set_relay":
         channel = str(args.get("name") or "")

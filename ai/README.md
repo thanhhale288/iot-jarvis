@@ -17,6 +17,7 @@ Trường (khi sống): `https://research.neu.edu.vn/ollama` · `qwen3:8b` — x
 |--------------|------|
 | `mock` (mặc định) | Tools → `host` mock, **không** Serial |
 | `serial` | Tools → `SerialBridge` + Uno thật |
+| `real` | Tools → Uno Serial + ESP32 `ESP32_URL` (B4/B5) |
 
 ```bash
 # Chỉ tools mock (không cần Ollama / USB)

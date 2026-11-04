@@ -233,13 +233,13 @@ Không implement. Không xóa khỏi PROTOCOL. Không tự thêm field khác.
 
 `emotion` dùng cùng enum `led.state`. `motion` dùng enum `motion.name`. `text` tiếng Việt, TTS của P2.
 
-**ESP32 → host (tuần 2+):**
+**ESP32 → host (dành sẵn — không implement hiện tại):**
 
 ```json
 {"v":1,"from":"esp32","cmd":"event","name":"clap"}
 ```
 
-`name`: `clap` | `proximity`.
+`name`: `clap` | `proximity`. **Ngoài phạm vi hiện tại** (KY-037 / HC-SR04 không gắn) — giữ schema, không code / không nối dây.
 
 **Uno IR (tuần 4):**
 

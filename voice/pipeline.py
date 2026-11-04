@@ -110,6 +110,31 @@ def run_voice_turn(
     timings.ask_path = LAST_ASK_STATS.path
     timings.tool_s = LAST_ASK_STATS.tool_s
     timings.first_token_s = LAST_ASK_STATS.first_token_s
+
+    # B7: STT→…→TTS + led/motion Otto khi AI_BACKEND=real|serial
+    act_on = os.getenv("VOICE_ACT", "1").strip().lower() not in ("0", "false", "no")
+    backend = os.getenv("AI_BACKEND", "mock").strip().lower()
+    if act_on and backend in ("real", "board", "hw", "serial", "uno", "bridge"):
+        try:
+            from host.router import make_router_from_env
+            from host.speak_act import guess_emotion_motion, speak_and_act
+
+            emotion, motion = guess_emotion_motion(
+                timings.user_text, timings.assistant_text
+            )
+            router = make_router_from_env()
+            speak_and_act(
+                router,
+                text=timings.assistant_text,
+                emotion=emotion,
+                motion=motion,
+            )
+            close = getattr(router.uno, "close", None)
+            if callable(close):
+                close()
+        except Exception as e:
+            print(f"[voice] speak_and_act skip: {e}", flush=True)
+
     if speak_out and TTS_MODE != "chunk" and timings.assistant_text:
         t_tts = time.time()
         timings.spoken_text = speak(timings.assistant_text)

@@ -19,7 +19,7 @@ Không đổi schema một mình. Không đưa JSON của ESP32 qua Serial Uno. 
 | Mốc | Task | Được làm |
 |-----|------|----------|
 | 14/09 | T01–T06 | `ping`, `led`, `motion` ACK, `get_env` (`temp`+`hum` thật) |
-| 19/09 | T07–T12 | Bridge giữ cổng + chống reset; LDR, đất, LCD, `relay`, `pump`; vỗ tay + siêu âm + TTS |
+| 19/09 | T07–T12 | Bridge giữ cổng + chống reset; LDR, đất, LCD, `relay`, `pump` (MB370); TTS |
 | 24/09 | T13–T18 | MVP nói → Qwen → loa → Otto; `speak_and_act`; đất khô thì tưới |
 | 29/09 | T19–T24 | Remote IR; Uno nhắc khi vượt ngưỡng (vòng ~60s) |
 | sau 29/09, trước 10/10 | T25–T30 | Đóng băng kịch bản; Hey Jarvis; `turn_left` / `turn_right` / `step_forward`. Bỏ gait nếu chưa ổn |
@@ -38,17 +38,17 @@ Không đổi schema một mình. Không đưa JSON của ESP32 qua Serial Uno. 
 | LCD1602 + I2C | 2, 3 | P3 `uno/` | T09 | Hiện T/H và L/S tại chỗ. SDA→**A4**, SCL→**A5** | Không có lệnh riêng |
 | Relay 1 kênh | 11 | P3 `uno/` | T09 | Đèn. IN → **D7** | `relay` `id:"light"` |
 | LED + trở (giả quạt) | 34–36, 32 | P3 `uno/` | T09 | Quạt tuần 2 = LED, (+) qua trở → **D8** | `relay` `id:"fan"` |
-| L298 + bơm MB370 | 10, 23 | P3 `uno/` | T09, T15, T33 | IN1 → **D9**. `seconds` 1–5, mặc định 2. Hết giờ tự tắt. Cooldown 5s → `busy`. Nguồn bơm riêng, chung GND | `pump` |
+| **L298 + bơm MB370** | 10, 23 | P3 `uno/` | T09, T15, T33 | **Trong phạm vi hiện tại.** IN1 → **D9**. `seconds` 1–5, mặc định 2. Hết giờ tự tắt. Cooldown 5s → `busy`. Nguồn bơm **5V ngoài**, chung GND (không lấy từ Uno 5V) | `pump` |
 | Arduino Uno R3 | 1 | P3 `uno/` + `serial_bridge/` | T03, T07 | Serial **115200**. Bridge mở **một lần**, DTR/RTS false, delay ~2s. Không reset mỗi lệnh | Mọi lệnh `to:"uno"` |
 | TFT ST7789 240×240 | (mua) | P2 `esp32/` | T02, T14 | Mặt cảm xúc Otto. 5 trạng thái: idle, listening, thinking, speaking, happy, alert. Pin: [`esp32/README.md`](../esp32/README.md) | `led` `state` (render TFT, **không** NeoPixel) |
-| Cảm biến âm thanh KY-037 | 5 | P2 `esp32/` | T08 | Vỗ tay, digital D0→**D35** + debounce | `event` `name:"clap"` |
-| Siêu âm HC-SR04 | 14 | P2 `esp32/` | T08 | Mắt khoảng cách gần. TRIG/ECHO qua level shifter → D4/D5. Chi tiết ở mục dưới | `event` `name:"proximity"` |
-| Buzzer 5V | 26 | P3 `uno/` | T08 / T10 | Cắm **ngoài hub Uno**, chân **D6** (+ transistor nếu cần). Beep local (ngưỡng / host sau). **Không** gắn ESP32 | Không thêm `cmd` |
+| Buzzer 5V | 26 | P3 `uno/` | T10 | Cắm **ngoài hub Uno**, chân **D6** (+ transistor nếu cần). Beep local (ngưỡng / host sau). **Không** gắn ESP32 | Không thêm `cmd` |
 | Servo SG90 ×4 | 24 + mua | P2 `esp32/` | T14, T16, T26 | Otto: nod, shake, think, happy, alert; tuần 5 thêm turn_left, turn_right, step_forward. PWM D16/D13/D26/D14. **5V ngoài ≥3A, chung GND**. Không đi bộ | `motion` `name` |
 | Thu IR 1838 + remote | 20, 21 | P3 `uno/` | T21, T19 | Điều khiển khi tắt mic. Tuần 4 | `event` `name:"ir"` `code` |
 | Breadboard, dây, trở, LED rời | 31–41 | P4 / người đang cắm | T10 | Chỉ để nối các dòng **trong plan** | — |
 
-Pin Uno: [`uno/README.md`](../uno/README.md). Pin ESP32 (TFT, siêu âm, mic, servo): [`esp32/README.md`](../esp32/README.md) — không ghi vào PROTOCOL.
+Pin Uno: [`uno/README.md`](../uno/README.md). Pin ESP32 (TFT, servo): [`esp32/README.md`](../esp32/README.md) — không ghi vào PROTOCOL.
+
+**Cảm biến / actuator đang dùng:** DHT11, MS-CDS05, đất TH, **bơm MB370 (+ L298)**, relay/LED fan, TFT, servo ×4. **Không** KY-037 / HC-SR04.
 
 `speak_and_act` (tuần 3, P3 → host → P2): `text` tiếng Việt, `emotion` = enum `led.state`, `motion` = enum `motion.name`. Host đọc `to` rồi gửi đúng đường.
 
@@ -58,6 +58,8 @@ Có trong kit, **không** có task. Không thêm field JSON, không gắn “cho
 
 | Linh kiện | STT | Vì sao để yên |
 |-----------|-----|----------------|
+| Cảm biến âm thanh KY-037 | 5 | **Bỏ khỏi plan hiện tại** — không gắn; không làm `event` `clap` |
+| Siêu âm HC-SR04 | 14 | **Bỏ khỏi plan hiện tại** — không gắn; không làm `event` `proximity` |
 | DS1307 + AT24C32 | 4 | Plan không có đồng hồ / log thời gian |
 | Rung SW-420 | 7 | Không có event rung |
 | Cảm biến mưa | 9 | Tưới theo **đất**, không theo mưa |
@@ -72,26 +74,16 @@ Có trong kit, **không** có task. Không thêm field JSON, không gắn “cho
 | Nút nhấn + vỏ | 28, 29 | Không có nút trên bàn trong task |
 | Chiết áp B10K | 30 | Ngưỡng để trong code, không chỉnh bằng biến trở |
 
-## Ví dụ: “làm cảm biến siêu âm”
+## Ví dụ: “làm bơm / tưới”
 
 Làm **đúng** thế này:
 
-- Folder `esp32/` (P2), task **T08**, cùng tuần với vỗ tay + TTS (mốc 19/09).
-- SRF04 là **mắt**: vật ở gần → gửi một dòng
+- Folder `uno/` + `serial_bridge/` / host (P3), task **T09 / T15**.
+- Đất khô (`soil` lớn) → `pump` `on:true`, `seconds` 1–5; hết giờ tự tắt; cooldown 5s → `busy`.
+- Nguồn motor **5V ngoài**, chung GND với Uno — không nuôi bơm từ USB/Uno 5V.
 
-```json
-{"v":1,"from":"esp32","cmd":"event","name":"proximity"}
-```
+Làm **sai** (dừng):
 
-- Host nhận `proximity` rồi mới quyết định (tuần 3 có thể `speak_and_act` / `led` alert). Firmware mắt **không** tưới, không gọi Qwen.
-- Buzzer **không** trên ESP32 (đã chuyển Uno D6). Event `proximity` / `clap` vẫn từ ESP32; beep do Uno.
-
-Làm **sai** (dừng, dù user chỉ nói “làm siêu âm”):
-
-- Gắn SRF04 lên Uno hoặc nhét `distance` vào `get_env`.
-- Thêm `cmd:"ultrasonic"` hoặc field `cm` — PROTOCOL chưa có.
-- Dùng khoảng cách để bật bơm / relay.
-- Làm mắt trước khi `ping` + `led` trên ESP32 chạy.
-- Đổi PROTOCOL một mình.
-
-Âm thanh đi cùng mắt, không phải cảm biến thứ hai tùy ý: vỗ tay → `event` `name:"clap"`, cũng từ ESP32, cũng T08.
+- Gắn lại KY-037 / HC-SR04 “cho đủ kit” — đã **ngoài plan**.
+- Tưới vô hạn / bỏ cooldown.
+- Thêm field JSON mới cho bơm mà không họp schema.
