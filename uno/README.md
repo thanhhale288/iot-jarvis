@@ -53,9 +53,12 @@ Breadboard kiểu kit (GL No.12) thường thế này:
 | LED fan tạm         | —     | (+) qua trở → **D8**      |
 | L298 → bơm          | 10+23 | IN1 → **D9** (xem Bước 6) |
 | **Buzzer 5V**       | 26    | Tín hiệu → **D6** (cắm ngoài hub; **không** ESP32) |
+| Thu IR 1838        | 20+21 | OUT → **D3**; VCC→5V; GND→GND |
 
 
 Cổng Serial mẫu: `/dev/cu.usbserial-2110` (đổi `.env` → `UNO_PORT` nếu khác).
+
+**Plan-soft C (firmware `get_env`):** IR → JSON `event` `ir`; mỗi ~60s đất khô (`soil`≥650) → beep D6 + **tự bơm 2s** (C5, không cần laptop). Lắng nghe IR trên host: `python -m host.ir_listen`.
 
 ---
 

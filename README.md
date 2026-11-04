@@ -33,12 +33,15 @@ P1 không ôm lát dọc. Đổi schema JSON = họp P2 + P3, không sửa một
 
 Laptop **phát Hotspot**. ESP32 join mạng đó — không dùng Wi‑Fi trường.
 
-| | Điền khi có |
-|--|-------------|
-| SSID | _chưa chốt_ |
-| Password | _chưa chốt_ |
-| IP ESP32 | _chưa chốt_ |
-| Cổng Serial Uno | _vd. `/dev/cu.usbmodem*` hoặc `COM3`_ |
+| | Giá trị |
+|--|---------|
+| SSID | `halekeke` (pass trong `wifi_config.h` local) |
+| Password | _local only — không commit_ |
+| IP ESP32 | `192.168.15.165` (Serial 2026-11-03) → `.env` `ESP32_URL=http://192.168.15.165` |
+| Cổng Serial Uno | `/dev/cu.usbserial-2110` (`.env` `UNO_PORT`) |
+| Cổng Serial ESP32 | `/dev/cu.usbserial-2120` (nạp firmware) |
+
+**Board thật (plan-soft B):** `AI_BACKEND=real` · `ESP32_TRANSPORT=http` · `ESP32_URL=http://192.168.15.165` (đổi IP nếu Serial in khác).
 
 ## Tuần 1
 

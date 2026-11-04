@@ -1,25 +1,27 @@
 /*
- * Otto act — TFT emotion + 4 servo motion (lien ket).
- * TFT: CS22 DC21 MOSI23 SCK18 RST27 (TFT_eSPI User_Setup Otto)
- * Servo: YL=CT14 YR=CP13 RL=BT26 RR=BP16  Buzzer dummy D15
+ * Otto act — TFT + servo + Wi‑Fi PROTOCOL (plan-soft B1).
+ * TFT: CS22 DC21 MOSI23 SCK18 RST27
+ * Servo: YL14 YR13 RL26 RR16  Buzzer dummy D15
+ * Không KY-037 / HC-SR04 (ngoài plan).
  *
- * Serial 115200:
- *   happy
- *   {"v":1,"id":"1","to":"esp32","cmd":"motion","name":"happy"}
- *   {"v":1,"id":"2","to":"esp32","cmd":"led","state":"alert"}
- *
- * FOOT_H=30°. Khong playGesture (can LED matrix).
+ * HTTP POST /cmd  body = 1 JSON → response 1 JSON
+ * Serial 115200: cùng JSON / lệnh text (debug)
  */
 
+#include <WiFi.h>
+#include <WebServer.h>
 #include <ArduinoJson.h>
 #include <TFT_eSPI.h>
 #include <Grobot_Animations.h>
 #include <Otto.h>
 
+#include "wifi_config.h"
+
 Otto Otto;
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite canvas = TFT_eSprite(&tft);
 GrobotEyes eyes(0x97E0, TFT_BLACK);
+WebServer server(80);
 
 #define LeftLeg 14
 #define RightLeg 13
@@ -36,8 +38,8 @@ const MoodData MOOD_ANNOY_L = {6, 0, 40, 18, 42};
 const MoodData MOOD_ANNOY_R = {6, 0, 18, 18, 42};
 
 struct Face {
-  const char *key;   // PROTOCOL emotion or motion alias
-  const char *label; // TFT label
+  const char *key;
+  const char *label;
   MoodData left;
   MoodData right;
   int lookX;
@@ -47,7 +49,6 @@ struct Face {
   uint8_t mouth;
 };
 
-// PROTOCOL led.state + alias motion → mat TFT
 static const Face faces[] = {
   {"idle",      "IDLE",   MOOD_NEUTRAL, MOOD_NEUTRAL, 0, 0,    0x4C9F, 0, 0},
   {"listening", "LISTEN", MOOD_LISTEN,  MOOD_LISTEN,  0, -16,  0xFE60, 1, 0},
@@ -66,6 +67,7 @@ static const int FACE_COUNT = sizeof(faces) / sizeof(faces[0]);
 
 static const Face *currentFace = &faces[0];
 static uint32_t lastLook = 0;
+static bool wifiReady = false;
 
 static const Face *findFace(const char *key) {
   if (!key) return nullptr;
@@ -155,29 +157,74 @@ static bool runMotion(const char *name) {
   return false;
 }
 
-// Mat truoc, servo sau — cung key (emotion/motion)
 static bool act(const char *key) {
   const Face *f = findFace(key);
   if (f) applyFace(f);
 
   const char *motion = key;
-  // led.state listening/speaking/thinking → motion khac ten
   const char *mapped = emotionToMotion(key);
   if (mapped) motion = mapped;
 
   return runMotion(motion);
 }
 
-static void sendAck(const char *id, bool ok, const char *name, const char *err) {
+static String buildAck(const char *id, bool ok, const char *field, const char *value,
+                       const char *err) {
   JsonDocument doc;
   doc["v"] = 1;
   if (id && id[0]) doc["id"] = id;
   doc["from"] = "esp32";
   doc["ok"] = ok;
-  if (ok && name) doc["name"] = name;
+  if (ok && field && value) doc[field] = value;
   if (!ok && err) doc["error"] = err;
-  serializeJson(doc, Serial);
-  Serial.println();
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+static String handleJsonCmd(const char *line) {
+  JsonDocument req;
+  if (deserializeJson(req, line)) {
+    return buildAck("", false, nullptr, nullptr, "bad_args");
+  }
+
+  const char *id = req["id"] | "";
+  const char *cmd = req["cmd"] | "";
+  if (!id[0] || !cmd[0]) {
+    return buildAck(id, false, nullptr, nullptr, "bad_args");
+  }
+
+  if (strcmp(cmd, "ping") == 0) {
+    return buildAck(id, true, nullptr, nullptr, nullptr);
+  }
+
+  if (strcmp(cmd, "motion") == 0) {
+    const char *name = req["name"] | "";
+    if (!name[0] || !act(name)) {
+      return buildAck(id, false, nullptr, nullptr, "bad_args");
+    }
+    return buildAck(id, true, "name", name, nullptr);
+  }
+
+  if (strcmp(cmd, "led") == 0) {
+    const char *state = req["state"] | "";
+    if (!state[0] || !act(state)) {
+      return buildAck(id, false, nullptr, nullptr, "bad_args");
+    }
+    JsonDocument doc;
+    doc["v"] = 1;
+    doc["id"] = id;
+    doc["from"] = "esp32";
+    doc["ok"] = true;
+    doc["state"] = state;
+    const char *m = emotionToMotion(state);
+    if (m) doc["name"] = m;
+    String out;
+    serializeJson(doc, out);
+    return out;
+  }
+
+  return buildAck(id, false, nullptr, nullptr, "unknown_cmd");
 }
 
 static void handleLine(char *line) {
@@ -187,73 +234,104 @@ static void handleLine(char *line) {
     size_t n = strlen(line);
     while (n > 0 && (line[n - 1] == ' ' || line[n - 1] == '\t')) line[--n] = '\0';
     if (n == 0) return;
-    if (act(line)) {
-      sendAck("s", true, line, nullptr);
-    } else {
-      sendAck("s", false, nullptr, "bad_args");
+    String ack = act(line)
+                     ? buildAck("s", true, "name", line, nullptr)
+                     : buildAck("s", false, nullptr, nullptr, "bad_args");
+    Serial.println(ack);
+    return;
+  }
+
+  String ack = handleJsonCmd(line);
+  Serial.println(ack);
+}
+
+static void handleHttpCmd() {
+  if (server.method() != HTTP_POST) {
+    server.send(405, "application/json",
+                "{\"v\":1,\"from\":\"esp32\",\"ok\":false,\"error\":\"bad_args\"}");
+    return;
+  }
+  String body = server.arg("plain");
+  if (body.length() == 0) body = server.arg(0);
+  body.trim();
+  if (body.length() == 0) {
+    server.send(400, "application/json",
+                "{\"v\":1,\"from\":\"esp32\",\"ok\":false,\"error\":\"bad_args\"}");
+    return;
+  }
+  String ack = handleJsonCmd(body.c_str());
+  server.send(200, "application/json", ack);
+}
+
+static void startHttpServer() {
+  server.on("/cmd", HTTP_POST, handleHttpCmd);
+  server.on("/ping", HTTP_GET, []() {
+    server.send(200, "application/json",
+                "{\"v\":1,\"from\":\"esp32\",\"ok\":true,\"cmd\":\"ping\"}");
+  });
+  server.begin();
+  Serial.println("HTTP :80 POST /cmd");
+}
+
+static void connectWifi() {
+  if (strcmp(WIFI_PASS, "CHANGE_ME") == 0 || strcmp(WIFI_PASS, "YOUR_HOTSPOT_PASSWORD") == 0) {
+    Serial.println("WiFi: set WIFI_PASS in wifi_config.h then reflash");
+    wifiReady = false;
+    return;
+  }
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.printf("WiFi connecting to %s", WIFI_SSID);
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - start) < 20000UL) {
+    delay(400);
+    Serial.print('.');
+  }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiReady = true;
+    Serial.print("WiFi OK IP=");
+    Serial.println(WiFi.localIP());
+    startHttpServer();
+  } else {
+    wifiReady = false;
+    Serial.println("WiFi FAIL — Serial JSON vẫn dùng được");
+  }
+}
+
+// C5: tự nối lại khi mất AP (không block loop lâu)
+static uint32_t wifiRetryAt = 0;
+
+static void serviceWifi() {
+  if (strcmp(WIFI_PASS, "CHANGE_ME") == 0 || strcmp(WIFI_PASS, "YOUR_HOTSPOT_PASSWORD") == 0) {
+    return;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiReady) {
+      wifiReady = true;
+      Serial.print("WiFi reconnected IP=");
+      Serial.println(WiFi.localIP());
+      startHttpServer();
     }
     return;
   }
-
-  JsonDocument req;
-  if (deserializeJson(req, line)) {
-    sendAck("", false, nullptr, "bad_args");
+  if (wifiReady) {
+    wifiReady = false;
+    Serial.println("WiFi lost — will retry");
+  }
+  if ((long)(millis() - wifiRetryAt) < 0) {
     return;
   }
-
-  const char *id = req["id"] | "";
-  const char *cmd = req["cmd"] | "";
-  if (!id[0] || !cmd[0]) {
-    sendAck(id, false, nullptr, "bad_args");
-    return;
-  }
-
-  if (strcmp(cmd, "ping") == 0) {
-    JsonDocument doc;
-    doc["v"] = 1;
-    doc["id"] = id;
-    doc["from"] = "esp32";
-    doc["ok"] = true;
-    serializeJson(doc, Serial);
-    Serial.println();
-    return;
-  }
-
-  if (strcmp(cmd, "motion") == 0) {
-    const char *name = req["name"] | "";
-    if (!name[0] || !act(name)) {
-      sendAck(id, false, nullptr, "bad_args");
-      return;
-    }
-    sendAck(id, true, name, nullptr);
-    return;
-  }
-
-  if (strcmp(cmd, "led") == 0) {
-    const char *state = req["state"] | "";
-    if (!state[0] || !act(state)) {
-      sendAck(id, false, nullptr, "bad_args");
-      return;
-    }
-    JsonDocument doc;
-    doc["v"] = 1;
-    doc["id"] = id;
-    doc["from"] = "esp32";
-    doc["ok"] = true;
-    doc["state"] = state;
-    doc["name"] = emotionToMotion(state);
-    serializeJson(doc, Serial);
-    Serial.println();
-    return;
-  }
-
-  sendAck(id, false, nullptr, "unknown_cmd");
+  wifiRetryAt = millis() + 8000UL;
+  Serial.println("WiFi reconnect…");
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println("=== otto_motion TFT+servo linked ===");
+  Serial.println("=== otto_motion TFT+servo+WiFi PROTOCOL ===");
 
   tft.init();
   tft.setRotation(1);
@@ -264,7 +342,8 @@ void setup() {
   Otto.home();
 
   applyFace(findFace("idle"));
-  Serial.println("ready — happy / nod / alert …");
+  connectWifi();
+  Serial.println("ready — Serial JSON hoặc POST /cmd");
 }
 
 void loop() {
@@ -274,6 +353,11 @@ void loop() {
     eyes.lookAt(currentFace->lookX + random(-10, 11),
                 currentFace->lookY + random(-8, 9));
     lastLook = millis();
+  }
+
+  serviceWifi();
+  if (wifiReady) {
+    server.handleClient();
   }
 
   static char buf[256];
@@ -289,7 +373,7 @@ void loop() {
       buf[len++] = c;
     } else {
       len = 0;
-      sendAck("", false, nullptr, "bad_args");
+      Serial.println(buildAck("", false, nullptr, nullptr, "bad_args"));
     }
   }
 }

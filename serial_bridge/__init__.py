@@ -106,15 +106,22 @@ class SerialBridge:
         self._ser.write(line.encode("utf-8"))
         self._ser.flush()
 
-        raw = self._ser.readline()
-        if not raw:
-            raise TimeoutError(
-                f"timeout {self.timeout}s chờ phản hồi Uno trên {self.port}"
-            )
-        text = raw.decode("utf-8", errors="replace").strip()
-        if not text:
-            raise TimeoutError("nhận dòng trống từ Uno")
-        return json.loads(text)
+        # Bỏ dòng rác / non-JSON đến khi gặp ACK hoặc hết timeout
+        deadline = time.time() + self.timeout
+        while time.time() < deadline:
+            raw = self._ser.readline()
+            if not raw:
+                continue
+            text = raw.decode("utf-8", errors="replace").strip()
+            if not text or not text.startswith("{"):
+                continue
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                continue
+        raise TimeoutError(
+            f"timeout {self.timeout}s chờ JSON từ Uno trên {self.port}"
+        )
 
     def get_env(self, cmd_id: str | None = None) -> dict[str, Any]:
         return self.request(

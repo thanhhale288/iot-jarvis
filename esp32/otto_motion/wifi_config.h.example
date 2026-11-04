@@ -1,0 +1,7 @@
+// Copy → wifi_config.h (không commit pass).
+// Hotspot laptop (quy định A) — ESP32 join mạng này.
+
+#pragma once
+
+#define WIFI_SSID "halekeke"
+#define WIFI_PASS "YOUR_HOTSPOT_PASSWORD"
