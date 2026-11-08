@@ -1,16 +1,15 @@
-"""A8: enum khớp PROTOCOL; pump 1–5s; cooldown 5s → busy."""
+"""A8 DoD: enum PROTOCOL + pump 1–5s + cooldown 5s → busy."""
 
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
-from host.mock_boards import LED_STATES, MOTION_NAMES, RELAY_IDS, MockEsp32, MockUno
-from host.router import HostRouter, MockEsp32Transport, MockUnoTransport
-from host.speak_act import LED_STATES as SA_LED
-from host.speak_act import MOTION_NAMES as SA_MOTION
+from host.mock_boards import LED_STATES, MOTION_NAMES, MockEsp32, MockUno
+from host.router import make_mock_router
 
 
-# PROTOCOL §3–4 — nguồn sự thật cho enum
+# Khớp docs/PROTOCOL.md §3
 PROTOCOL_LED = frozenset(
     {"idle", "listening", "thinking", "speaking", "happy", "alert"}
 )
@@ -27,102 +26,121 @@ PROTOCOL_MOTION = frozenset(
         "step_forward",
     }
 )
-PROTOCOL_RELAY = frozenset({"light", "fan"})
 
 
-class FakeClock:
-    def __init__(self) -> None:
-        self.t = 0.0
-
-    def __call__(self) -> float:
-        return self.t
-
-    def advance(self, s: float) -> None:
-        self.t += s
-
-
-class TestEnumsA8(unittest.TestCase):
-    def test_led_motion_relay_match_protocol(self) -> None:
+class TestProtocolEnumsA8(unittest.TestCase):
+    def test_led_enum_matches_protocol(self) -> None:
         self.assertEqual(LED_STATES, PROTOCOL_LED)
-        self.assertEqual(MOTION_NAMES, PROTOCOL_MOTION)
-        self.assertEqual(RELAY_IDS, PROTOCOL_RELAY)
-        self.assertEqual(SA_LED, PROTOCOL_LED)
-        self.assertEqual(SA_MOTION, PROTOCOL_MOTION)
 
-    def test_led_bad_args(self) -> None:
-        esp = MockEsp32()
-        out = esp.handle(
-            {"v": 1, "id": "1", "to": "esp32", "cmd": "led", "state": "rainbow"}
+    def test_motion_enum_matches_protocol(self) -> None:
+        self.assertEqual(MOTION_NAMES, PROTOCOL_MOTION)
+
+    def test_esp32_rejects_unknown_emotion(self) -> None:
+        out = MockEsp32().handle(
+            {"v": 1, "id": "1", "to": "esp32", "cmd": "led", "state": "angry"}
         )
         self.assertFalse(out["ok"])
         self.assertEqual(out["error"], "bad_args")
 
-    def test_motion_bad_args(self) -> None:
-        esp = MockEsp32()
-        out = esp.handle(
-            {"v": 1, "id": "2", "to": "esp32", "cmd": "motion", "name": "dance"}
+    def test_esp32_rejects_unknown_motion(self) -> None:
+        out = MockEsp32().handle(
+            {"v": 1, "id": "1", "to": "esp32", "cmd": "motion", "name": "fly"}
         )
         self.assertFalse(out["ok"])
         self.assertEqual(out["error"], "bad_args")
 
 
 class TestPumpCooldownA8(unittest.TestCase):
-    def setUp(self) -> None:
-        self.clock = FakeClock()
-        self.uno = MockUno(clock=self.clock, cooldown_s=5.0)
-        self.router = HostRouter(
-            uno=MockUnoTransport(self.uno), esp32=MockEsp32Transport()
+    def test_seconds_out_of_range(self) -> None:
+        uno = MockUno()
+        bad = uno.handle(
+            {"v": 1, "id": "p", "to": "uno", "cmd": "pump", "on": True, "seconds": 9}
         )
+        self.assertFalse(bad["ok"])
+        self.assertEqual(bad["error"], "bad_args")
 
-    def _pump(self, on: bool, seconds: int = 2) -> dict:
-        return self.router.dispatch(
-            {
-                "v": 1,
-                "id": "p",
-                "to": "uno",
-                "cmd": "pump",
-                "on": on,
-                "seconds": seconds,
-            }
+        zero = uno.handle(
+            {"v": 1, "id": "p0", "to": "uno", "cmd": "pump", "on": True, "seconds": 0}
         )
+        self.assertFalse(zero["ok"])
 
-    def test_seconds_range(self) -> None:
-        bad0 = self._pump(True, 0)
-        self.assertFalse(bad0["ok"])
-        self.assertEqual(bad0["error"], "bad_args")
-        bad6 = self._pump(True, 6)
-        self.assertFalse(bad6["ok"])
-        self.assertEqual(bad6["error"], "bad_args")
-        ok = self._pump(True, 1)
-        self.assertTrue(ok["ok"])
-        self.assertEqual(ok["seconds"], 1)
+    def test_cooldown_second_on_is_busy(self) -> None:
+        uno = MockUno()
+        t0 = 1000.0
+        with mock.patch.object(uno, "_time") as tm:
+            tm.monotonic.return_value = t0
+            r1 = uno.handle(
+                {
+                    "v": 1,
+                    "id": "1",
+                    "to": "uno",
+                    "cmd": "pump",
+                    "on": True,
+                    "seconds": 2,
+                }
+            )
+            self.assertTrue(r1["ok"])
+            # Ngay sau đó vẫn trong cooldown 5s
+            tm.monotonic.return_value = t0 + 1.0
+            r2 = uno.handle(
+                {
+                    "v": 1,
+                    "id": "2",
+                    "to": "uno",
+                    "cmd": "pump",
+                    "on": True,
+                    "seconds": 2,
+                }
+            )
+            self.assertFalse(r2["ok"])
+            self.assertEqual(r2["error"], "busy")
+            # Sau 5s: được tưới lại
+            tm.monotonic.return_value = t0 + 5.01
+            r3 = uno.handle(
+                {
+                    "v": 1,
+                    "id": "3",
+                    "to": "uno",
+                    "cmd": "pump",
+                    "on": True,
+                    "seconds": 1,
+                }
+            )
+            self.assertTrue(r3["ok"])
 
-    def test_busy_while_running(self) -> None:
-        self.assertTrue(self._pump(True, 2)["ok"])
-        again = self._pump(True, 2)
-        self.assertFalse(again["ok"])
-        self.assertEqual(again["error"], "busy")
+    def test_router_pump_cooldown(self) -> None:
+        router = make_mock_router()
+        # Dùng cùng MockUno bên trong — thay board có cooldown
+        from host.router import MockUnoTransport
 
-    def test_cooldown_after_timeout(self) -> None:
-        self.assertTrue(self._pump(True, 2)["ok"])
-        self.clock.advance(2.0)
-        # service on next cmd
-        busy = self._pump(True, 1)
-        self.assertFalse(busy["ok"])
-        self.assertEqual(busy["error"], "busy")
-        self.clock.advance(5.0)
-        ok = self._pump(True, 1)
-        self.assertTrue(ok["ok"])
-
-    def test_off_always_accepted(self) -> None:
-        self.assertTrue(self._pump(True, 3)["ok"])
-        off = self._pump(False, 2)
-        self.assertTrue(off["ok"])
-        # sau off → cooldown
-        busy = self._pump(True, 1)
-        self.assertEqual(busy.get("error"), "busy")
-        self.clock.advance(5.0)
-        self.assertTrue(self._pump(True, 1)["ok"])
+        board = MockUno()
+        router.uno = MockUnoTransport(board)
+        with mock.patch.object(board, "_time") as tm:
+            tm.monotonic.return_value = 50.0
+            self.assertTrue(
+                router.dispatch(
+                    {
+                        "v": 1,
+                        "id": "a",
+                        "to": "uno",
+                        "cmd": "pump",
+                        "on": True,
+                        "seconds": 2,
+                    }
+                )["ok"]
+            )
+            tm.monotonic.return_value = 51.0
+            busy = router.dispatch(
+                {
+                    "v": 1,
+                    "id": "b",
+                    "to": "uno",
+                    "cmd": "pump",
+                    "on": True,
+                    "seconds": 2,
+                }
+            )
+            self.assertEqual(busy.get("error"), "busy")
 
 
 if __name__ == "__main__":

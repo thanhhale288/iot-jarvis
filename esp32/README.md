@@ -38,6 +38,19 @@ Smoke TFT: `esp32/tft_test/`. Firmware chính: `esp32/otto_motion/`.
 
 ---
 
+## Wi‑Fi `POST /cmd` (B1)
+
+Sketch `otto_motion/` (Serial **và** HTTP):
+
+1. Copy `esp32/otto_motion/wifi_config.example.h` → `wifi_config.h`, điền SSID/pass Hotspot laptop.
+2. Nạp board, Serial 115200: dòng `WiFi OK http://x.x.x.x/cmd`.
+3. Host: `ESP32_TRANSPORT=http` · `ESP32_URL=http://x.x.x.x`.
+
+```bash
+curl -sS -X POST http://x.x.x.x/cmd -H 'Content-Type: application/json' \
+  -d '{"v":1,"id":"1","to":"esp32","cmd":"ping"}'
+```
+
 ## Nguồn (nhắc)
 
 - Servo: **5V ngoài ≥3A**, không lấy từ chân 5V ESP32.

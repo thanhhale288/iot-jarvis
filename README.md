@@ -1,12 +1,105 @@
 # Jarvis-on-Desk
 
-Đồ án IoT — Otto + cảm biến bàn + Qwen.
+Đồ án IoT — Otto + cảm biến bàn + LLM (DeepSeek / Ollama Qwen).
 
-**Hợp đồng JSON (đọc trước khi code):** [`docs/PROTOCOL.md`](docs/PROTOCOL.md)  
-**Mỗi cảm biến làm gì (đừng lệch plan):** [`docs/CONTEXT.md`](docs/CONTEXT.md)  
-**Repo tham khảo (P2/P3 clone gì):** [`docs/NEED_REPOS.md`](docs/NEED_REPOS.md)
+**Hợp đồng JSON:** [`docs/PROTOCOL.md`](docs/PROTOCOL.md)  
+**Cảm biến / phạm vi:** [`docs/CONTEXT.md`](docs/CONTEXT.md)  
+**Plan soft:** [`docs/plan-soft.md`](docs/plan-soft.md)  
+**Việc còn lại trước demo:** [`last-task.md`](last-task.md)
 
 Repo: https://github.com/thanhhale288/iot-jarvis
+
+---
+
+## Demo mai — bàn giao nhanh
+
+### 0. Setup máy (một lần)
+
+```bash
+git clone https://github.com/thanhhale288/iot-jarvis.git
+cd iot-jarvis
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r voice/requirements.txt
+cp .env.example .env
+# Dán DEEPSEEK_API_KEY; chỉnh UNO_PORT / ESP32_PORT khi có board
+```
+
+| Env quan trọng | Gợi ý demo |
+|----------------|------------|
+| `LLM_PROVIDER` | `deepseek` (nhanh) hoặc `ollama` (offline) |
+| `AI_BACKEND` | `serial` khi cắm board; thiếu cổng → tự mock |
+| `OTTO_ACT` | `1` = điều khiển Otto; `0` = chỉ chữ/giọng |
+| `TTS_MODE` | `chunk` = nói sớm; `full` = khớp chữ↔audio |
+| `STT_MODEL` | `small` (VI đúng hơn); lần đầu load chậm |
+
+### 1. Không cần board (rehearsal)
+
+```bash
+source .venv/bin/activate
+python -m tests.smoke_mvp_soft          # DeepSeek + mock + TTS
+AI_BACKEND=mock python -m frontend      # http://127.0.0.1:8787
+```
+
+Cảm biến mock trả JSON mẫu (`temp`/`hum`/`light`/`soil`). Otto `turn_left` / `turn_right` / `step_forward` ACK mock được.
+
+### 2. Có board (demo thật)
+
+1. Đóng Serial Monitor / Arduino IDE trên đúng cổng.  
+2. Cắm Uno + ESP32 (chung GND nếu nguồn ngoài).  
+3. `.env`: `AI_BACKEND=serial`, đúng `UNO_PORT` / `ESP32_PORT`.  
+4. Chạy:
+
+```bash
+source .venv/bin/activate
+python -m frontend
+# hoặc CLI:
+python -m voice.pipeline "Nhiệt độ hiện tại?"
+python -m ai "Bật đèn"
+```
+
+### 3. Script 4 câu (chốt)
+
+1. “Nhiệt độ và độ ẩm hiện tại?”  
+2. “Bật đèn”  
+3. “Otto vui lên” / “Quay trái”  
+4. Một câu chat thường (ngoài IoT)
+
+Checklist đầy đủ: [`last-task.md`](last-task.md).
+
+### Quy định demo
+
+| | |
+|--|--|
+| **A** | Laptop phát Hotspot; ESP32 join (không Wi‑Fi trường) nếu dùng HTTP |
+| **B** | Servo/bơm 5V ngoài, **chung GND** |
+| **C** | Serial Uno mở một lần; delay ~2s sau `open` |
+
+| | Giá trị demo |
+|--|-------------|
+| SSID hotspot | `halekeke` (pass trong `wifi_config.h` local — không commit) |
+| IP ESP32 | `192.168.15.165` → `.env` `ESP32_URL=http://192.168.15.165` |
+| `UNO_PORT` | `/dev/cu.usbserial-2110` (đổi nếu ngược) |
+| `ESP32_PORT` | `/dev/cu.usbserial-2120` |
+
+Board Wi‑Fi: `AI_BACKEND=serial` hoặc `real` · `ESP32_TRANSPORT=http` · đúng `ESP32_URL`.
+
+---
+
+## Thư mục
+
+| Thư mục | Chủ | Việc |
+|---------|-----|------|
+| `esp32/` | P2 | Firmware Otto, TFT, Wi‑Fi — [`esp32/README.md`](esp32/README.md) |
+| `voice/` | P2 | STT / TTS / pipeline |
+| `frontend/` | P2 | Chat web chữ + giọng + Otto |
+| `host/` | P3 | Router, `speak_and_act` — [`host/README.md`](host/README.md) |
+| `uno/` | P3 | Firmware DHT, relay, bơm |
+| `ai/` | P3 | LLM + tools — [`ai/README.md`](ai/README.md) |
+| `serial_bridge/` | P3 | USB Serial → JSON (quy định C) |
+| `docs/` | P1 | PROTOCOL, kế hoạch |
+| `tests/` | P5 | Unit + smoke |
+
+P1 không ôm lát dọc. Đổi schema JSON = họp P2 + P3.
 
 ## Clone
 
@@ -14,37 +107,3 @@ Repo: https://github.com/thanhhale288/iot-jarvis
 git clone https://github.com/thanhhale288/iot-jarvis.git
 cd iot-jarvis
 ```
-
-## Thư mục
-
-| Thư mục | Chủ | Việc |
-|---------|-----|------|
-| `esp32/` | P2 | Firmware Otto, TFT, Wi‑Fi — pin: [`esp32/README.md`](esp32/README.md) |
-| `voice/` | P2 | STT / TTS / wake |
-| `uno/` | P3 | Firmware DHT, relay, bơm |
-| `ai/` | P3 | Qwen, tools |
-| `serial_bridge/` | P3 | USB Serial → JSON (quy định C) |
-| `docs/` | P1 | PROTOCOL, kế hoạch |
-| `tests/` | P5 | Checklist, smoke |
-
-P1 không ôm lát dọc. Đổi schema JSON = họp P2 + P3, không sửa một mình.
-
-## Mạng demo (quy định A)
-
-Laptop **phát Hotspot**. ESP32 join mạng đó — không dùng Wi‑Fi trường.
-
-| | Giá trị |
-|--|---------|
-| SSID | `halekeke` (pass trong `wifi_config.h` local) |
-| Password | _local only — không commit_ |
-| IP ESP32 | `192.168.15.165` (Serial 2026-11-03) → `.env` `ESP32_URL=http://192.168.15.165` |
-| Cổng Serial Uno | `/dev/cu.usbserial-2110` (`.env` `UNO_PORT`) |
-| Cổng Serial ESP32 | `/dev/cu.usbserial-2120` (nạp firmware) |
-
-**Board thật (plan-soft B):** `AI_BACKEND=real` · `ESP32_TRANSPORT=http` · `ESP32_URL=http://192.168.15.165` (đổi IP nếu Serial in khác).
-
-## Tuần 1
-
-P2: Wi‑Fi echo `led`→TFT + STT 1 câu.  
-P3: DHT11 ra JSON sau khi rút/cắm USB.  
-P1: PROTOCOL đã ghi; 10/09 họp P2/P3 ký schema.

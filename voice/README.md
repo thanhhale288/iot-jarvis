@@ -10,7 +10,15 @@ cd /Users/hale/Code/IOT
 source .venv/bin/activate
 pip install -r voice/requirements.txt
 
-# UI: mic → Jarvis + time-to-first-speech
+# Cửa sổ hội thoại (chữ + giọng + Otto nếu OTTO_ACT=1)
+python -m frontend
+# → http://127.0.0.1:8787
+
+# CLI: STT/text → LLM → speak_and_act (TFT+servo) + TTS
+python -m voice.pipeline "Otto vui lên"
+python -m voice.pipeline "Gật đầu" --no-tts
+
+# UI đo độ trễ: mic → Jarvis + time-to-first-speech
 python -m voice.ui
 # → http://127.0.0.1:7860
 
@@ -34,7 +42,7 @@ python -m voice.wake
 |------|------|
 | Record | Cắt khi im lặng (`STT_SILENCE_MS=600`) |
 | STT | Mặc định `small` + `beam=5` (đúng VI); `base`/`1` nếu cần tốc độ |
-| LLM | Ollama Qwen + tools; prompt viết **để đọc thành tiếng** |
+| LLM | Ollama Qwen hoặc `LLM_PROVIDER=deepseek`; prompt viết **để đọc thành tiếng** |
 | TTS | `TTS_MODE=full`: **text UI = audio** (một lần đọc); `chunk` = overlap |
 
 Metric: **`time-to-first-speech`**. Kiểm tra khớp: `assistant` và `spoken` phải giống nhau.

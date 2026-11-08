@@ -35,20 +35,13 @@ static void sweepBp() {
   Serial.println("BP -> 1800 us");
   delay(800);
   bp.writeMicroseconds(HOME_US);
-  Serial.println("--- BP done ---");
-  delay(400);
-}
-
-static void runTest() {
-  holdOthers();
-  sweepBp();
-  sweepBp();
-  Serial.println("ALL DONE — gui 'r' de chay lai");
+  Serial.println("BP done");
 }
 
 void setup() {
   Serial.begin(115200);
   delay(400);
+
   bp.setPeriodHertz(50);
   cp.setPeriodHertz(50);
   ct.setPeriodHertz(50);
@@ -57,15 +50,29 @@ void setup() {
   cp.attach(CP_PIN, 500, 2500);
   ct.attach(CT_PIN, 500, 2500);
   bt.attach(BT_PIN, 500, 2500);
+
   holdOthers();
-  bp.writeMicroseconds(HOME_US);
-  Serial.println("=== BP-only smoke ===");
-  runTest();
+  Serial.println("=== BP SMOKE D16 ===");
+  for (int i = 0; i < 2; i++) {
+    Serial.printf("round %d\n", i + 1);
+    sweepBp();
+    delay(300);
+  }
+  Serial.println("ALL DONE — gui 'r' de chay lai");
 }
 
 void loop() {
   while (Serial.available()) {
     char c = Serial.read();
-    if (c == 'r' || c == 'R') runTest();
+    if (c == 'r' || c == 'R') {
+      holdOthers();
+      for (int i = 0; i < 2; i++) {
+        Serial.printf("round %d\n", i + 1);
+        sweepBp();
+        delay(300);
+      }
+      Serial.println("ALL DONE");
+    }
   }
+  delay(20);
 }

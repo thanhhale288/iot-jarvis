@@ -6,6 +6,9 @@ venv/
 .env
 .env.*
 !.env.example
+**/wifi_config.h
+!**/wifi_config.example.h
+wifi_config.h
 
 # Arduino / PlatformIO
 .pio/
@@ -24,5 +27,6 @@ venv/
 # Agent working memory (planning-with-files / token-lean)
 .planning/
 scratch/
-wifi_config.h
-**/wifi_config.h
+
+# Third-party clones (local only)
+refs/

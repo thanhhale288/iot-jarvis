@@ -45,11 +45,11 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 | B3 | `serial_bridge` giữ cổng, chống reset | `serial_bridge/` | DTR/RTS false; delay ~2s; không mất dòng JSON đầu |
 | B4 | Host: mock → bridge + Wi‑Fi thật | host | Cùng API A2, đổi transport |
 | B5 | AI tools → bridge thật | `ai/` | `python -m ai "…"` điều khiển Uno thật |
-| B6 | ~~Event clap/proximity~~ | — | **Hủy** — KY-037 / HC-SR04 ngoài plan (không gắn) |
+| B6 | Event ESP32 | `esp32/` | `clap` (KY-037), `proximity` (HC-SR04); host nhận rồi quyết định |
 | B7 | E2E giọng → Otto | `voice/` + host + `esp32/` | STT → Qwen → TTS + `led`/`motion` trên robot; ưu tiên pipeline A6b nếu đã có |
-| B8 | Luật đất khô → **bơm** | host / `ai/` + `uno/` | Đọc `soil` → `pump` (MB370+L298) có hạn, không tưới vô hạn |
+| B8 | Luật đất khô → tưới | host / `ai/` | Đọc `soil` → `pump` có hạn, không tưới vô hạn |
 
-**Thứ tự B:** B1+B2 → B3 → B4 → B5 → B7 → B8 (bỏ B6).
+**Thứ tự B:** B1+B2 → B3 → B4 → B5 → B6 → B7 → B8.
 
 ---
 
@@ -93,8 +93,9 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 | Bucket | Trạng thái |
 |--------|------------|
 | A (offline) | A1–A9 ✅ (`python -m tests.smoke_a9`; A8 = `tests/test_protocol_a8.py`) |
-| B (có board) | B1–B5,B7–B8 ✅ · B6 ❌ hủy (không KY-037/HC-SR04) · bơm MB370 trong plan |
-| C (sau MVP) | C1–C5 ✅ — IR D3 + `host.ir_listen`; beep+auto-bơm 60s; `voice.wake`; motions tuần 5; ESP Wi‑Fi reconnect |
+| B (có board) | B1–B5,B7–B8 ✅ · B6 hủy (không KY-037/HC-SR04) |
+| C (sau MVP) | C1–C5 có trên main · demo mai ưu tiên soft + Serial/HTTP Otto |
 
-**Hardware còn lại:** cắm IR OUT→D3 nếu chưa; nói “Hey Jarvis” với `python -m voice.wake`.  
-**Latency:** `python -m voice.pipeline` / UI — xem `time-to-first-speech`.
+**Next (demo mai):** [`last-task.md`](../last-task.md) · soft smoke → cắm board.  
+**Smoke soft:** `python -m tests.smoke_mvp_soft`  
+**Latency:** `python -m voice.pipeline` / `python -m frontend` · `TTS_MODE=chunk`.
