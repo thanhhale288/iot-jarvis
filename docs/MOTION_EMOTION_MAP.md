@@ -11,11 +11,15 @@
 | `nod` | `bend(1,1200,LEFT)` | Gật / nghiêng |
 | `shake` | `shakeLeg(1,1200,RIGHT)` | Lắc chân |
 | `think` | `jitter(3,600,20)` | Suy nghĩ (hông) |
-| `happy` | `swing` + `tiptoeSwing` FOOT_H | Vui |
+| `happy` | `swing` + `tiptoeSwing` FOOT_H — đùi CT/CP + bàn BT/BP | Vui |
 | `alert` | `swing` nhanh + `shakeLeg` LEFT | Cảnh báo |
-| `turn_left` | `turn(…,LEFT)` | Tuần 5 |
-| `turn_right` | `turn(…,RIGHT)` | Tuần 5 |
-| `step_forward` | `walk(2,…,FORWARD)` | Tuần 5 |
+| `forward` / `tien` / `step_forward` | `walk(3,1000,FORWARD)` rồi `home()` | 4 servo (đùi + bàn) |
+| `backward` / `lui` / `step_back` | `walk(3,1000,BACKWARD)` rồi `home()` | 4 servo |
+| `left` / `trai` / `turn_left` | `turn(3,1000,LEFT)` rồi `home()` | 4 servo |
+| `right` / `phai` / `turn_right` | `turn(3,1000,RIGHT)` rồi `home()` | 4 servo |
+
+CP trim trong firmware: `Otto.setTrims(0, 14, 0, 0)` (YR ≈ +14° / 1654 µs).  
+Emotion `swing`/`bend`/`shakeLeg`/`jitter` cần OttoDIYLib local có amp đùi ≠ 0 (bản trong `refs/OttoDIYLib`).
 
 Không dùng `playGesture` (cần LED matrix Otto).
 
@@ -38,9 +42,13 @@ Host luôn gửi kèm `motion` (mặc định theo bảng trên nếu LLM không
 ## Test Serial
 
 ```bash
-screen /dev/cu.usbserial-2110 115200
+screen /dev/cu.usbserial-2120 115200
 # rồi gõ:
+forward
+backward
+left
+right
 happy
-{"v":1,"id":"1","to":"esp32","cmd":"motion","name":"nod"}
+{"v":1,"id":"1","to":"esp32","cmd":"motion","name":"forward"}
 {"v":1,"id":"2","to":"esp32","cmd":"led","state":"alert"}
 ```

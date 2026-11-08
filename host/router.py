@@ -203,3 +203,8 @@ def make_router(
     if mode in ("serial", "uno", "bridge", "real", "live"):
         return make_live_router(speak_fn=speak_fn)
     return make_mock_router(speak_fn=speak_fn)
+
+
+# Alias main / `python -m host --real`
+make_real_router = make_live_router
+

@@ -29,6 +29,11 @@ python -m voice.pipeline   # ghi mic đến khi im
 # Chỉ STT / TTS
 python -m voice
 python -c "from voice.tts import speak; speak('Xin chào')"
+
+# C3 — Wake “Hey Jarvis” rồi pipeline
+python -m voice.wake
+# WAKE_BACKEND=stt (mặc định, Whisper tiny) | openwakeword + WAKE_MODEL=…
+# WAKE_ONCE=1 — một lần rồi thoát
 ```
 
 ## Tối ưu độ trễ

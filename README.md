@@ -74,13 +74,14 @@ Checklist đầy đủ: [`last-task.md`](last-task.md).
 | **B** | Servo/bơm 5V ngoài, **chung GND** |
 | **C** | Serial Uno mở một lần; delay ~2s sau `open` |
 
-| | Điền khi có |
+| | Giá trị demo |
 |--|-------------|
-| SSID hotspot | _chưa chốt_ |
-| Password | _chưa chốt_ |
-| IP ESP32 | _chưa chốt_ |
-| `UNO_PORT` | vd. `/dev/cu.usbserial-2120` |
-| `ESP32_PORT` | vd. `/dev/cu.usbserial-2110` |
+| SSID hotspot | `halekeke` (pass trong `wifi_config.h` local — không commit) |
+| IP ESP32 | `192.168.15.165` → `.env` `ESP32_URL=http://192.168.15.165` |
+| `UNO_PORT` | `/dev/cu.usbserial-2110` (đổi nếu ngược) |
+| `ESP32_PORT` | `/dev/cu.usbserial-2120` |
+
+Board Wi‑Fi: `AI_BACKEND=serial` hoặc `real` · `ESP32_TRANSPORT=http` · đúng `ESP32_URL`.
 
 ---
 

@@ -80,12 +80,18 @@ def speak_and_act(
     emotion: str | None = None,
     motion: str | None = None,
     speak_fn: SpeakFn | None = None,
+    speak_text: bool = False,
     cmd_id: str | None = None,
 ) -> dict[str, Any]:
     """Tách speak_and_act → ESP32 led/motion + TTS.
 
     `speak_fn=None` → chỉ điều khiển Otto (pipeline/UI tự TTS).
+    `speak_text=True` → alias main: tự dùng `voice.tts.speak`.
     """
+    if speak_text and speak_fn is None:
+        from voice.tts import speak as _speak
+
+        speak_fn = _speak
     mid = cmd_id or _new_id()
     text = (text or "").strip()
     emo = normalize_emotion(emotion)

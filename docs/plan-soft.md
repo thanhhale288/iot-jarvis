@@ -92,10 +92,10 @@ Không thêm field JSON mới. Thiếu tầng → **mock đúng schema**.
 
 | Bucket | Trạng thái |
 |--------|------------|
-| A (offline) | A1–A8 ✅ |
-| B (có board) | B5/B7 Serial ✅; B1 firmware `POST /cmd` ✅ — cần Hotspot laptop để join Wi‑Fi; B6/B8 để sau |
-| C (sau MVP) | khóa / bỏ qua theo chốt demo |
+| A (offline) | A1–A9 ✅ (`python -m tests.smoke_a9`; A8 = `tests/test_protocol_a8.py`) |
+| B (có board) | B1–B5,B7–B8 ✅ · B6 hủy (không KY-037/HC-SR04) |
+| C (sau MVP) | C1–C5 có trên main · demo mai ưu tiên soft + Serial/HTTP Otto |
 
-**Next (demo mai):** soft smoke không board → cắm board → `AI_BACKEND=serial` + Otto.  
+**Next (demo mai):** [`last-task.md`](../last-task.md) · soft smoke → cắm board.  
 **Smoke soft:** `python -m tests.smoke_mvp_soft`  
-**Latency:** `python -m voice.pipeline` / `python -m frontend` · TTS nhanh hơn: `TTS_MODE=chunk`.
+**Latency:** `python -m voice.pipeline` / `python -m frontend` · `TTS_MODE=chunk`.

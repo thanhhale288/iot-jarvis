@@ -33,6 +33,7 @@ python -m ai "Nhiệt độ và độ ẩm hiện tại?"
 |--------------|------|
 | `mock` (mặc định) | Tools → `host` mock, **không** Serial |
 | `serial` | Tools → `SerialBridge` + Uno thật |
+| `real` | Tools → Uno Serial + ESP32 `ESP32_URL` (B4/B5) |
 
 ```bash
 # Chỉ tools mock (không cần Ollama / USB)

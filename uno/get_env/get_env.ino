@@ -1,14 +1,19 @@
-// Jarvis-on-Desk — Uno Tuần 2
+// Jarvis-on-Desk — Uno Tuần 2 + plan-soft C1/C2/C5
 // Pin map: xem uno/README.md
 // Baud 115200. Một dòng JSON vào → một dòng JSON ra.
-// id bắt buộc. relay dùng name=light|fan.
+// C1: IR D3 → event name=ir
+// C2: ~60s soil khô → beep D6
+// C5: đất khô → bơm local (không cần laptop)
 //
 // USE_LCD 0: tắt LCD (tránh treo Wire khi backpack lỗi) — bật lại = 1 sau khi I2C ổn.
 
 #include <ArduinoJson.h>
 #include <DHT.h>
+#include <IRremote.hpp>
 
 #define USE_LCD 0
+#define USE_IR 1
+#define AUTO_WATER 1
 
 #if USE_LCD
 #include <Wire.h>
@@ -24,7 +29,12 @@
 #define PIN_RELAY_LIGHT 7
 #define PIN_RELAY_FAN 8
 #define PIN_PUMP 9
+#define PIN_BUZZER 6
+#define PIN_IR 3
 #define PUMP_COOLDOWN_MS 5000UL
+#define THRESHOLD_MS 60000UL
+#define SOIL_DRY_THRESHOLD 650
+#define AUTO_PUMP_SECONDS 2
 
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -36,6 +46,7 @@ static unsigned long lcdNextRefresh = 0;
 static bool pumpOn = false;
 static unsigned long pumpOffAt = 0;
 static unsigned long pumpCooldownUntil = 0;
+static unsigned long nextThresholdAt = 0;
 
 static bool pumpInCooldown() {
   if (pumpCooldownUntil == 0) {
@@ -46,6 +57,18 @@ static bool pumpInCooldown() {
 
 static void armPumpCooldown() {
   pumpCooldownUntil = millis() + PUMP_COOLDOWN_MS;
+}
+
+static void beep(unsigned ms = 120) {
+  digitalWrite(PIN_BUZZER, HIGH);
+  delay(ms);
+  digitalWrite(PIN_BUZZER, LOW);
+}
+
+static void beepAlert() {
+  beep(80);
+  delay(60);
+  beep(80);
 }
 
 #if USE_LCD
@@ -90,6 +113,16 @@ void replyError(const char* id, const char* err) {
   doc["from"] = "uno";
   doc["ok"] = false;
   doc["error"] = err;
+  sendLine(doc);
+}
+
+void emitIrEvent(const char* codeHex) {
+  StaticJsonDocument<128> doc;
+  doc["v"] = 1;
+  doc["from"] = "uno";
+  doc["cmd"] = "event";
+  doc["name"] = "ir";
+  doc["code"] = codeHex;
   sendLine(doc);
 }
 
@@ -144,26 +177,40 @@ void handleRelay(const char* id, const char* name, bool on) {
   sendLine(doc);
 }
 
+// on=true returns false if busy (caller may silence Serial for auto)
+bool startPump(int seconds) {
+  if (seconds < 1) seconds = 1;
+  if (seconds > 5) seconds = 5;
+  if (pumpOn || pumpInCooldown()) {
+    return false;
+  }
+  digitalWrite(PIN_PUMP, HIGH);
+  pumpOn = true;
+  pumpOffAt = millis() + (unsigned long)seconds * 1000UL;
+  return true;
+}
+
+void stopPump() {
+  bool wasOn = pumpOn;
+  digitalWrite(PIN_PUMP, LOW);
+  pumpOn = false;
+  pumpOffAt = 0;
+  if (wasOn) {
+    armPumpCooldown();
+  }
+}
+
 void handlePump(const char* id, bool on, int seconds) {
   if (seconds < 1) seconds = 1;
   if (seconds > 5) seconds = 5;
 
   if (on) {
-    if (pumpOn || pumpInCooldown()) {
+    if (!startPump(seconds)) {
       replyError(id, "busy");
       return;
     }
-    digitalWrite(PIN_PUMP, HIGH);
-    pumpOn = true;
-    pumpOffAt = millis() + (unsigned long)seconds * 1000UL;
   } else {
-    bool wasOn = pumpOn;
-    digitalWrite(PIN_PUMP, LOW);
-    pumpOn = false;
-    pumpOffAt = 0;
-    if (wasOn) {
-      armPumpCooldown();
-    }
+    stopPump();
   }
 
   StaticJsonDocument<128> doc;
@@ -184,6 +231,49 @@ void servicePump() {
     armPumpCooldown();
   }
 }
+
+// C2 + C5: mỗi ~60s — khô → beep; AUTO_WATER → bơm 2s
+void serviceThreshold() {
+  if ((long)(millis() - nextThresholdAt) < 0) {
+    return;
+  }
+  nextThresholdAt = millis() + THRESHOLD_MS;
+
+  int soil = analogRead(PIN_SOIL_ADC);
+  if (soil < SOIL_DRY_THRESHOLD) {
+    return;  // đủ ẩm
+  }
+
+  beepAlert();
+
+#if AUTO_WATER
+  if (startPump(AUTO_PUMP_SECONDS)) {
+    // local only — không spam Serial khi laptop rút
+  }
+#endif
+}
+
+#if USE_IR
+void serviceIr() {
+  if (!IrReceiver.decode()) {
+    return;
+  }
+  // Prefer classic 24-bit style (vd FFA25D); fallback raw 32-bit
+  unsigned long v = IrReceiver.decodedIRData.decodedRawData;
+  if (v == 0 && IrReceiver.decodedIRData.command != 0) {
+    v = ((unsigned long)IrReceiver.decodedIRData.address << 8) |
+        IrReceiver.decodedIRData.command;
+  }
+  char code[12];
+  if (v <= 0xFFFFFFUL) {
+    snprintf(code, sizeof(code), "%06lX", v);
+  } else {
+    snprintf(code, sizeof(code), "%08lX", v);
+  }
+  emitIrEvent(code);
+  IrReceiver.resume();
+}
+#endif
 
 void handleLine(char* line) {
   StaticJsonDocument<256> req;
@@ -221,12 +311,21 @@ void setup() {
   pinMode(PIN_RELAY_LIGHT, OUTPUT);
   pinMode(PIN_RELAY_FAN, OUTPUT);
   pinMode(PIN_PUMP, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_RELAY_LIGHT, LOW);
   digitalWrite(PIN_RELAY_FAN, LOW);
   digitalWrite(PIN_PUMP, LOW);
+  digitalWrite(PIN_BUZZER, LOW);
 
   Serial.begin(115200);
   dht.begin();
+
+#if USE_IR
+  IrReceiver.begin(PIN_IR, DISABLE_LED_FEEDBACK);
+#endif
+
+  nextThresholdAt = millis() + THRESHOLD_MS;
+  beep(40);  // boot chirp
 
 #if USE_LCD
   Wire.begin();
@@ -236,15 +335,19 @@ void setup() {
   lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Jarvis Uno T2");
+  lcd.print("Jarvis Uno C");
   lcd.setCursor(0, 1);
-  lcd.print("LCD OK 0x27");
+  lcd.print("IR+auto soil");
   lcdNextRefresh = millis() + 2000;
 #endif
 }
 
 void loop() {
   servicePump();
+  serviceThreshold();
+#if USE_IR
+  serviceIr();
+#endif
 
 #if USE_LCD
   if ((long)(millis() - lcdNextRefresh) >= 0) {
