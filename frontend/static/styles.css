@@ -1,0 +1,275 @@
+:root {
+  color-scheme: light;
+  --ink: #1f1f1f;
+  --muted: #444746;
+  --faint: #5f6368;
+  --chip: #f0f4f9;
+  --line: #dde3ea;
+  --blue: #0b57d0;
+  --danger: #b3261e;
+  --shadow: 0 8px 28px rgba(60, 64, 67, 0.1);
+  --col: 760px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  font-size: 16px;
+}
+
+button, textarea { font: inherit; color: inherit; }
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  flex: none;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.thread {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.col {
+  width: min(var(--col), calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.thread .col {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0 24px;
+}
+
+.empty {
+  margin: auto;
+  text-align: center;
+  max-width: 520px;
+  padding: 24px 8px;
+}
+
+.empty h1 {
+  margin: 0 0 8px;
+  font-size: 40px;
+  font-weight: 450;
+  letter-spacing: -0.5px;
+}
+
+.empty p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.msg-user {
+  align-self: flex-end;
+  max-width: min(78%, 540px);
+  background: var(--chip);
+  border-radius: 22px;
+  padding: 10px 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-assistant {
+  align-self: stretch;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-assistant.error { color: var(--danger); }
+
+.msg-assistant.pending {
+  color: var(--faint);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+
+.actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.icon-btn, #plus, #mic, #send {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.icon-btn:hover, #plus:hover, #mic:hover {
+  background: var(--chip);
+}
+
+.meta {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.meta summary { cursor: pointer; }
+
+.dock {
+  flex: none;
+  padding-bottom: 16px;
+}
+
+.fineprint {
+  margin: 0 8px 8px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.composer {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  padding: 4px 8px 6px;
+}
+
+.composer:focus-within { border-color: #c4c7c5; }
+
+textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  padding: 12px 10px 4px;
+  line-height: 1.45;
+  max-height: 160px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding-left: 2px;
+}
+
+.grow { flex: 1; }
+
+#status, #model {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+#model { margin-right: 2px; }
+
+#plus, #mic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+#mic.hot {
+  background: #fce8e6;
+  color: var(--danger);
+}
+
+#send {
+  width: 36px;
+  height: 36px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+}
+
+#send[hidden] { display: none; }
+
+#send:disabled {
+  background: #e8eaed;
+  color: #fff;
+  cursor: default;
+}
+
+.plus-wrap { position: relative; }
+
+.menu {
+  position: absolute;
+  left: 0;
+  bottom: 46px;
+  min-width: 220px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+
+.menu button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.menu button:hover { background: var(--chip); }
+
+@media (max-width: 640px) {
+  .empty h1 { font-size: 32px; }
+  .msg-user { max-width: 88%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-assistant.pending { animation: none; }
+}

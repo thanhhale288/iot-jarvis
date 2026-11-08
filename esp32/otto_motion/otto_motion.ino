@@ -1,32 +1,35 @@
 /*
- * Otto act — TFT emotion + 4 servo motion (lien ket).
- * TFT: CS22 DC21 MOSI23 SCK18 RST27 (TFT_eSPI User_Setup Otto)
- * Servo: YL=CT14 YR=CP13 RL=BT26 RR=BP16  Buzzer dummy D15
+ * Otto act — TFT emotion + 4 servo + Wi‑Fi POST /cmd (B1).
+ * TFT: CS22 DC21 MOSI23 SCK18 RST27
+ * Servo: YL=CT14 YR=CP13 RL=BT26 RR=BP17  Buzzer dummy D15
  *
- * Serial 115200:
- *   happy
- *   {"v":1,"id":"1","to":"esp32","cmd":"motion","name":"happy"}
- *   {"v":1,"id":"2","to":"esp32","cmd":"led","state":"alert"}
- *
- * FOOT_H=30°. Khong playGesture (can LED matrix).
+ * Serial 115200 + HTTP POST http://<ip>/cmd  body = một JSON
+ * wifi_config.h ← copy từ wifi_config.example.h
  */
 
 #include <ArduinoJson.h>
 #include <TFT_eSPI.h>
 #include <Grobot_Animations.h>
 #include <Otto.h>
+#include <WiFi.h>
+#include <WebServer.h>
+
+#include "wifi_config.h"
 
 Otto Otto;
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite canvas = TFT_eSprite(&tft);
 GrobotEyes eyes(0x97E0, TFT_BLACK);
+WebServer server(80);
 
 #define LeftLeg 14
 #define RightLeg 13
 #define LeftFoot 26
-#define RightFoot 16
+#define RightFoot 17
 #define BuzzerPin 15
 #define FOOT_H 30
+
+static String g_reply;
 
 const MoodData MOOD_LISTEN = {16, 0, -28, 30, 46};
 const MoodData MOOD_THINK  = {10, 0, 18, 14, 42};
@@ -36,8 +39,8 @@ const MoodData MOOD_ANNOY_L = {6, 0, 40, 18, 42};
 const MoodData MOOD_ANNOY_R = {6, 0, 18, 18, 42};
 
 struct Face {
-  const char *key;   // PROTOCOL emotion or motion alias
-  const char *label; // TFT label
+  const char *key;
+  const char *label;
   MoodData left;
   MoodData right;
   int lookX;
@@ -47,7 +50,6 @@ struct Face {
   uint8_t mouth;
 };
 
-// PROTOCOL led.state + alias motion → mat TFT
 static const Face faces[] = {
   {"idle",      "IDLE",   MOOD_NEUTRAL, MOOD_NEUTRAL, 0, 0,    0x4C9F, 0, 0},
   {"listening", "LISTEN", MOOD_LISTEN,  MOOD_LISTEN,  0, -16,  0xFE60, 1, 0},
@@ -155,17 +157,19 @@ static bool runMotion(const char *name) {
   return false;
 }
 
-// Mat truoc, servo sau — cung key (emotion/motion)
 static bool act(const char *key) {
   const Face *f = findFace(key);
   if (f) applyFace(f);
-
   const char *motion = key;
-  // led.state listening/speaking/thinking → motion khac ten
   const char *mapped = emotionToMotion(key);
   if (mapped) motion = mapped;
-
   return runMotion(motion);
+}
+
+static void emitDoc(JsonDocument &doc) {
+  g_reply = "";
+  serializeJson(doc, g_reply);
+  Serial.println(g_reply);
 }
 
 static void sendAck(const char *id, bool ok, const char *name, const char *err) {
@@ -176,8 +180,7 @@ static void sendAck(const char *id, bool ok, const char *name, const char *err) 
   doc["ok"] = ok;
   if (ok && name) doc["name"] = name;
   if (!ok && err) doc["error"] = err;
-  serializeJson(doc, Serial);
-  Serial.println();
+  emitDoc(doc);
 }
 
 static void handleLine(char *line) {
@@ -214,8 +217,7 @@ static void handleLine(char *line) {
     doc["id"] = id;
     doc["from"] = "esp32";
     doc["ok"] = true;
-    serializeJson(doc, Serial);
-    Serial.println();
+    emitDoc(doc);
     return;
   }
 
@@ -231,10 +233,12 @@ static void handleLine(char *line) {
 
   if (strcmp(cmd, "led") == 0) {
     const char *state = req["state"] | "";
-    if (!state[0] || !act(state)) {
+    const Face *f = findFace(state);
+    if (!state[0] || !f) {
       sendAck(id, false, nullptr, "bad_args");
       return;
     }
+    applyFace(f);
     JsonDocument doc;
     doc["v"] = 1;
     doc["id"] = id;
@@ -242,18 +246,69 @@ static void handleLine(char *line) {
     doc["ok"] = true;
     doc["state"] = state;
     doc["name"] = emotionToMotion(state);
-    serializeJson(doc, Serial);
-    Serial.println();
+    emitDoc(doc);
     return;
   }
 
   sendAck(id, false, nullptr, "unknown_cmd");
 }
 
+static void handleHttpCmd() {
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "POST only");
+    return;
+  }
+  String body = server.arg("plain");
+  if (body.length() == 0) {
+    body = server.arg("body");
+  }
+  if (body.length() == 0) {
+    server.send(400, "application/json",
+                "{\"v\":1,\"from\":\"esp32\",\"ok\":false,\"error\":\"bad_args\"}");
+    return;
+  }
+  // Bản sao để handleLine chỉnh buffer
+  char buf[256];
+  size_t n = body.length();
+  if (n >= sizeof(buf)) n = sizeof(buf) - 1;
+  memcpy(buf, body.c_str(), n);
+  buf[n] = '\0';
+  g_reply = "";
+  handleLine(buf);
+  if (g_reply.length() == 0) {
+    g_reply = "{\"v\":1,\"from\":\"esp32\",\"ok\":false,\"error\":\"bad_args\"}";
+  }
+  server.send(200, "application/json", g_reply);
+}
+
+static void setupWifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.printf("WiFi joining %s …\n", WIFI_SSID);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
+    delay(300);
+    Serial.print('.');
+  }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi OK http://");
+    Serial.print(WiFi.localIP());
+    Serial.println("/cmd");
+    server.on("/cmd", HTTP_POST, handleHttpCmd);
+    server.on("/cmd", HTTP_GET, []() {
+      server.send(200, "text/plain", "POST JSON to /cmd");
+    });
+    server.begin();
+  } else {
+    Serial.println("WiFi FAIL — chỉ Serial");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println("=== otto_motion TFT+servo linked ===");
+  Serial.println("=== otto_motion TFT+servo+WiFi ===");
 
   tft.init();
   tft.setRotation(1);
@@ -264,10 +319,15 @@ void setup() {
   Otto.home();
 
   applyFace(findFace("idle"));
-  Serial.println("ready — happy / nod / alert …");
+  setupWifi();
+  Serial.println("ready — Serial + HTTP /cmd");
 }
 
 void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    server.handleClient();
+  }
+
   eyes.renderEmotions(canvas);
 
   if (millis() - lastLook > 900 && currentFace) {

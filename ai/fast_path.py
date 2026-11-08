@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-FAST_PATH = os.getenv("AI_FAST_PATH", "1").strip() not in ("0", "false", "no")
+FAST_PATH = os.getenv("AI_FAST_PATH", "0").strip() not in ("0", "false", "no")
 ENV_CACHE_TTL = float(os.getenv("AI_ENV_CACHE_TTL", "2.0"))
 
 _env_cache: dict[str, Any] = {"at": 0.0, "data": None}

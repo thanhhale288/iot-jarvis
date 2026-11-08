@@ -32,8 +32,8 @@ Cùng enum `led.state`. TFT `tft_eyes` label ↔ emotion:
 | `happy` | HAPPY | `happy` |
 | `alert` | ALERT | `alert` |
 
-`speak_and_act`: host gửi `emotion` → ESP32 `led`, `motion` → ESP32 `motion`.  
-Nếu chỉ gửi `led`, sketch này vẫn chạy motion mặc định ở bảng trên.
+`speak_and_act`: host gửi `emotion` → ESP32 `led` (**chỉ TFT**), `motion` → ESP32 `motion` (TFT theo key + servo).  
+Host luôn gửi kèm `motion` (mặc định theo bảng trên nếu LLM không chọn). Plain text `happy` trên Serial vẫn = `act()` (mặt + servo).
 
 ## Test Serial
 

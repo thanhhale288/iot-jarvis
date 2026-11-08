@@ -1,7 +1,8 @@
-"""AI Tuần 2: Ollama + tools get_environment / set_relay / set_pump.
+"""AI Tuần 2: LLM + tools get_environment / set_relay / set_pump.
 
 A3: backend mock (không Serial). AI_BACKEND=serial khi có Uno.
-A4: system prompt Jarvis chỉnh được (AI_SYSTEM_PROMPT); cần Ollama sống.
+A4: system prompt Jarvis chỉnh được (AI_SYSTEM_PROMPT).
+LLM: mặc định Ollama local; `LLM_PROVIDER=deepseek` dùng API DeepSeek (OpenAI-compatible).
 """
 
 from __future__ import annotations
@@ -25,18 +26,31 @@ load_dotenv()
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 AI_BACKEND = os.getenv("AI_BACKEND", "mock").strip().lower()
+# ollama (mặc định, offline) | deepseek (API cloud — nhanh/thông minh hơn 7B local)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+DEEPSEEK_BASE_URL = os.getenv(
+    "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+).rstrip("/")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip()
 
 # A4: giọng Jarvis — override bằng AI_SYSTEM_PROMPT trong .env (một dòng hoặc \\n)
 DEFAULT_SYSTEM_PROMPT = (
-    "Bạn là Jarvis trên bàn học — nói chuyện bằng tiếng Việt, một câu ngắn.\n"
-    "Câu trả lời sẽ được đọc thành tiếng (TTS): viết đúng như sẽ nói, không markdown, "
-    "không ký hiệu (°C viết thành 'độ C', % thành 'phần trăm'), không tiếng Anh thừa.\n"
-    "Luôn dùng tool khi cần số liệu hoặc điều khiển; không bịa số cảm biến, không bịa ACK.\n"
-    "- Hỏi nhiệt/ẩm/sáng/đất/môi trường → get_environment, rồi nói đúng số từ JSON.\n"
+    "Bạn là Jarvis — trợ lý thông minh gắn bàn học, nhưng trả lời được mọi chủ đề "
+    "như một mô hình hội thoại đầy đủ (kiến thức, giải thích, code, dịch, toán, "
+    "ý tưởng, trò chuyện…). Không từ chối chỉ vì câu hỏi ngoài bàn học.\n"
+    "Ưu tiên tiếng Việt trừ khi người dùng yêu cầu ngôn ngữ khác.\n"
+    "Câu trả lời sẽ được đọc thành tiếng (TTS): viết như đang nói, không markdown "
+    "(không **, #, bảng, bullet ký hiệu), °C viết 'độ C', % viết 'phần trăm'. "
+    "Câu điều khiển bàn học / Otto: ngắn. Câu hỏi chung: trả lời đủ ý; đừng cắt cụt.\n"
+    "Chỉ dùng tool khi liên quan cảm biến, thiết bị bàn, hoặc robot Otto; "
+    "không bịa số cảm biến, không bịa ACK.\n"
+    "- Hỏi nhiệt/ẩm/sáng/đất/môi trường bàn → get_environment, rồi nói đúng số JSON.\n"
     "- Bật/tắt đèn → set_relay name=light; quạt → name=fan; on true/false.\n"
     "- Tưới/bơm → set_pump on=true, seconds 1–5 (mặc định 2); không tưới vô hạn.\n"
-    "Ví dụ giọng: 'Nhiệt độ hai mươi tám phẩy bốn độ C, độ ẩm sáu mốt phần trăm.' "
-    "hoặc 'Đã bật đèn.'"
+    "- Otto mặt/chân (vui, lắng nghe, nghĩ, cảnh báo, gật, lắc, đi tới…) → otto_act "
+    "với emotion và/hoặc motion đúng enum; không bịa tên ngoài danh sách.\n"
+    "Các câu khác: trả lời trực tiếp, không gọi tool."
 )
 
 _ENV_HINTS = (
@@ -62,6 +76,14 @@ _ACTION_HINTS = (
     "relay",
     "pump",
     "fan",
+    "otto",
+    "gật",
+    "lắc",
+    "vui",
+    "cảnh báo",
+    "lắng nghe",
+    "bước",
+    "quay",
 )
 
 
@@ -146,6 +168,50 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "otto_act",
+            "description": (
+                "Điều khiển Otto (TFT emotion + servo motion). Gọi khi người dùng "
+                "bảo robot vui/lắng nghe/nghĩ/cảnh báo/gật/lắc/quay/bước, hoặc cần "
+                "đổi mặt theo tâm trạng câu trả lời. emotion: idle|listening|thinking|"
+                "speaking|happy|alert. motion: idle|nod|shake|think|happy|alert|"
+                "turn_left|turn_right|step_forward. Có thể chỉ emotion, chỉ motion, "
+                "hoặc cả hai."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "emotion": {
+                        "type": "string",
+                        "enum": [
+                            "idle",
+                            "listening",
+                            "thinking",
+                            "speaking",
+                            "happy",
+                            "alert",
+                        ],
+                    },
+                    "motion": {
+                        "type": "string",
+                        "enum": [
+                            "idle",
+                            "nod",
+                            "shake",
+                            "think",
+                            "happy",
+                            "alert",
+                            "turn_left",
+                            "turn_right",
+                            "step_forward",
+                        ],
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -154,7 +220,7 @@ def _new_id() -> str:
 
 
 class BoardBackend(Protocol):
-    """Uno actuators — mock hoặc Serial."""
+    """Uno + Otto qua HostRouter (mock hoặc Serial)."""
 
     def get_env(self) -> dict[str, Any]: ...
 
@@ -162,21 +228,39 @@ class BoardBackend(Protocol):
 
     def set_pump(self, on: bool, seconds: int = 2) -> dict[str, Any]: ...
 
+    def otto_act(
+        self, emotion: str | None = None, motion: str | None = None
+    ) -> dict[str, Any]: ...
+
+    def set_led(self, state: str) -> dict[str, Any]: ...
+
     def close(self) -> None: ...
 
 
-class MockBoardBackend:
-    """A3: tools → HostRouter mock, không mở Serial."""
+class HostBoardBackend:
+    """A3/A7/B5/B7: mọi tool đi HostRouter (mock hoặc live)."""
 
-    def __init__(self, router: Any | None = None) -> None:
-        from host.router import make_mock_router
+    def __init__(
+        self, router: Any | None = None, *, kind: str | None = "mock"
+    ) -> None:
+        from host.router import make_router
 
-        self.router = router or make_mock_router()
+        self.router = router or make_router(kind)
+        self._last_otto: dict[str, Any] = {}
 
     def get_env(self) -> dict[str, Any]:
-        return self.router.dispatch(
-            {"v": 1, "id": _new_id(), "to": "uno", "cmd": "get_env"}
-        )
+        try:
+            return self.router.dispatch(
+                {"v": 1, "id": _new_id(), "to": "uno", "cmd": "get_env"}
+            )
+        except Exception as exc:
+            return {
+                "v": 1,
+                "from": "uno",
+                "ok": False,
+                "error": "sensor",
+                "detail": str(exc),
+            }
 
     def set_relay(self, name: str, on: bool) -> dict[str, Any]:
         return self.router.dispatch(
@@ -203,43 +287,88 @@ class MockBoardBackend:
             }
         )
 
+    def set_led(self, state: str) -> dict[str, Any]:
+        return self.router.dispatch(
+            {
+                "v": 1,
+                "id": _new_id(),
+                "to": "esp32",
+                "cmd": "led",
+                "state": state,
+            }
+        )
+
+    def otto_act(
+        self, emotion: str | None = None, motion: str | None = None
+    ) -> dict[str, Any]:
+        from host.speak_act import speak_and_act
+
+        out = speak_and_act(
+            self.router,
+            text="",
+            emotion=emotion,
+            motion=motion,
+            speak_fn=None,
+        )
+        self._last_otto = out
+        return out
+
     def close(self) -> None:
-        return None
+        close = getattr(self.router, "close", None)
+        if callable(close):
+            close()
 
 
-class SerialBoardBackend:
-    """B5 / có board: bọc SerialBridge."""
+# Alias cũ (test / import)
+MockBoardBackend = HostBoardBackend
+
+
+class SerialBoardBackend(HostBoardBackend):
+    """B5/B7: router live (Uno Serial + ESP32)."""
 
     def __init__(self, bridge: Any | None = None) -> None:
-        from serial_bridge import SerialBridge
+        if bridge is not None:
+            from host.router import HostRouter, MockEsp32Transport
+            from host.uno_serial import UnoSerialTransport
 
-        self._own = bridge is None
-        self.bridge = bridge or SerialBridge()
-        if self._own:
-            self.bridge.open()
-
-    def get_env(self) -> dict[str, Any]:
-        return self.bridge.get_env()
-
-    def set_relay(self, name: str, on: bool) -> dict[str, Any]:
-        return self.bridge.set_relay(name, on)
-
-    def set_pump(self, on: bool, seconds: int = 2) -> dict[str, Any]:
-        return self.bridge.set_pump(on, seconds)
-
-    def close(self) -> None:
-        if self._own:
-            self.bridge.close()
+            super().__init__(
+                HostRouter(uno=UnoSerialTransport(bridge), esp32=MockEsp32Transport())
+            )
+        else:
+            super().__init__(kind="serial")
 
 
 def make_backend(kind: str | None = None) -> BoardBackend:
     mode = (kind or AI_BACKEND or "mock").strip().lower()
-    if mode in ("serial", "uno", "bridge"):
+    if mode in ("serial", "uno", "bridge", "real", "live"):
         return SerialBoardBackend()
-    return MockBoardBackend()
+    return HostBoardBackend(kind="mock")
 
 
-def _chat(messages: list[dict[str, Any]], use_tools: bool = True) -> dict[str, Any]:
+def _llm_label() -> str:
+    if LLM_PROVIDER == "deepseek":
+        return f"deepseek:{DEEPSEEK_MODEL}"
+    return f"ollama:{OLLAMA_MODEL}"
+
+
+def _require_deepseek_key() -> None:
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError(
+            "LLM_PROVIDER=deepseek nhưng thiếu DEEPSEEK_API_KEY trong .env"
+        )
+
+
+def _deepseek_headers() -> dict[str, str]:
+    _require_deepseek_key()
+    return {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+
+def _chat_ollama(
+    messages: list[dict[str, Any]], use_tools: bool = True
+) -> dict[str, Any]:
     body: dict[str, Any] = {
         "model": OLLAMA_MODEL,
         "messages": messages,
@@ -252,10 +381,39 @@ def _chat(messages: list[dict[str, Any]], use_tools: bool = True) -> dict[str, A
     return r.json()
 
 
-def _chat_token_stream(
-    messages: list[dict[str, Any]],
-) -> Iterator[str]:
-    """A6b: Ollama stream=True — yield từng mảnh content (không tools)."""
+def _chat_deepseek(
+    messages: list[dict[str, Any]], use_tools: bool = True
+) -> dict[str, Any]:
+    """OpenAI-compatible /chat/completions → bọc giống Ollama `{message: ...}`."""
+    body: dict[str, Any] = {
+        "model": DEEPSEEK_MODEL,
+        "messages": messages,
+        "stream": False,
+    }
+    if use_tools:
+        body["tools"] = TOOLS
+    r = requests.post(
+        f"{DEEPSEEK_BASE_URL}/chat/completions",
+        json=body,
+        headers=_deepseek_headers(),
+        timeout=120,
+    )
+    r.raise_for_status()
+    data = r.json()
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError(f"DeepSeek trả về rỗng: {data!r}")
+    msg = choices[0].get("message") or {}
+    return {"message": msg}
+
+
+def _chat(messages: list[dict[str, Any]], use_tools: bool = True) -> dict[str, Any]:
+    if LLM_PROVIDER == "deepseek":
+        return _chat_deepseek(messages, use_tools=use_tools)
+    return _chat_ollama(messages, use_tools=use_tools)
+
+
+def _chat_token_stream_ollama(messages: list[dict[str, Any]]) -> Iterator[str]:
     body: dict[str, Any] = {
         "model": OLLAMA_MODEL,
         "messages": messages,
@@ -275,6 +433,55 @@ def _chat_token_stream(
             part = ((chunk.get("message") or {}).get("content")) or ""
             if part:
                 yield part
+
+
+def _chat_token_stream_deepseek(messages: list[dict[str, Any]]) -> Iterator[str]:
+    """A6b: DeepSeek SSE stream — yield từng mảnh content (không tools)."""
+    body: dict[str, Any] = {
+        "model": DEEPSEEK_MODEL,
+        "messages": messages,
+        "stream": True,
+    }
+    with requests.post(
+        f"{DEEPSEEK_BASE_URL}/chat/completions",
+        json=body,
+        headers=_deepseek_headers(),
+        timeout=120,
+        stream=True,
+    ) as r:
+        r.raise_for_status()
+        for line in r.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            if line.startswith("data:"):
+                payload = line[5:].strip()
+            else:
+                payload = line.strip()
+            if not payload or payload == "[DONE]":
+                if payload == "[DONE]":
+                    break
+                continue
+            try:
+                chunk = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            part = delta.get("content") or ""
+            if part:
+                yield part
+
+
+def _chat_token_stream(
+    messages: list[dict[str, Any]],
+) -> Iterator[str]:
+    """A6b: stream=True — yield từng mảnh content (không tools)."""
+    if LLM_PROVIDER == "deepseek":
+        yield from _chat_token_stream_deepseek(messages)
+        return
+    yield from _chat_token_stream_ollama(messages)
 
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…。！？\n])\s+")
@@ -335,6 +542,13 @@ def run_tool(name: str, args: dict[str, Any], backend: BoardBackend) -> str:
         seconds = int(args.get("seconds") or 2)
         data = backend.set_pump(on, seconds)
         return json.dumps(data, ensure_ascii=False)
+    if name == "otto_act":
+        emotion = args.get("emotion")
+        motion = args.get("motion")
+        emo = str(emotion).strip() if emotion else None
+        mot = str(motion).strip() if motion else None
+        data = backend.otto_act(emotion=emo or None, motion=mot or None)
+        return json.dumps(data, ensure_ascii=False)
     return json.dumps({"ok": False, "error": f"unknown_tool:{name}"})
 
 
@@ -343,20 +557,31 @@ def _run_tool_round(
     tool_calls: list[dict[str, Any]],
     backend: BoardBackend,
 ) -> None:
-    for call in tool_calls:
+    for i, call in enumerate(tool_calls):
         fn = call.get("function") or {}
         name = fn.get("name") or ""
         args = _parse_args(fn)
         print(f"[tool] {name} {args}", flush=True)
         result = run_tool(name, args, backend)
         print(f"[tool_result] {result}", flush=True)
-        messages.append(
-            {
-                "role": "tool",
-                "tool_name": name,
-                "content": result,
-            }
-        )
+        if LLM_PROVIDER == "deepseek":
+            # OpenAI / DeepSeek: bắt buộc tool_call_id khớp assistant.tool_calls[].id
+            call_id = str(call.get("id") or f"call_{i}_{name or 'tool'}")
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": result,
+                }
+            )
+        else:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_name": name,
+                    "content": result,
+                }
+            )
 
 
 def _prepare_messages(
@@ -387,7 +612,8 @@ def _prepare_messages(
             {
                 "role": "user",
                 "content": (
-                    "Bắt buộc gọi đúng tool (get_environment / set_relay / set_pump). "
+                    "Bắt buộc gọi đúng tool "
+                    "(get_environment / set_relay / set_pump / otto_act). "
                     "Không chỉ trả lời chữ."
                 ),
             }
@@ -502,8 +728,14 @@ def main() -> int:
         if len(sys.argv) > 1
         else "Nhiệt độ và độ ẩm hiện tại trên bàn là bao nhiêu?"
     )
-    print(f"OLLAMA_HOST={OLLAMA_HOST}")
-    print(f"OLLAMA_MODEL={OLLAMA_MODEL}")
+    print(f"LLM_PROVIDER={LLM_PROVIDER} ({_llm_label()})")
+    if LLM_PROVIDER == "deepseek":
+        print(f"DEEPSEEK_BASE_URL={DEEPSEEK_BASE_URL}")
+        print(f"DEEPSEEK_MODEL={DEEPSEEK_MODEL}")
+        print(f"DEEPSEEK_API_KEY={'set' if DEEPSEEK_API_KEY else 'MISSING'}")
+    else:
+        print(f"OLLAMA_HOST={OLLAMA_HOST}")
+        print(f"OLLAMA_MODEL={OLLAMA_MODEL}")
     print(f"AI_BACKEND={AI_BACKEND}")
     style = os.getenv("AI_SYSTEM_PROMPT", "").strip()
     print(f"AI_SYSTEM_PROMPT={'custom' if style else 'default'}")
@@ -511,7 +743,7 @@ def main() -> int:
     try:
         answer = ask(prompt)
     except requests.RequestException as e:
-        print(f"Lỗi Ollama: {e}", file=sys.stderr)
+        print(f"Lỗi LLM ({LLM_PROVIDER}): {e}", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"Lỗi: {e}", file=sys.stderr)

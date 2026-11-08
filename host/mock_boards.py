@@ -69,10 +69,17 @@ class MockEsp32:
 
 
 class MockUno:
-    """get_env mẫu; relay/pump khóa tên; lệnh lạ → unknown_cmd."""
+    """get_env mẫu; relay/pump khóa tên; cooldown bơm 5s (A8); lệnh lạ → unknown_cmd."""
+
+    PUMP_COOLDOWN_S = 5.0
 
     def __init__(self, env: dict[str, Any] | None = None) -> None:
+        import time as _time
+
         self.env = dict(env or SAMPLE_ENV)
+        self._time = _time
+        self._pump_on = False
+        self._cooldown_until = 0.0
 
     def handle(self, msg: dict[str, Any]) -> dict[str, Any]:
         cmd = msg.get("cmd")
@@ -95,6 +102,19 @@ class MockUno:
             seconds = msg.get("seconds", 2)
             if not isinstance(seconds, int) or seconds < 1 or seconds > 5:
                 return _err(msg, "uno", "bad_args")
+            now = self._time.monotonic()
+            if on:
+                if self._pump_on or now < self._cooldown_until:
+                    return _err(msg, "uno", "busy")
+                self._pump_on = True
+                # Giả lập hết giờ tưới ngay (mock) → arm cooldown
+                self._pump_on = False
+                self._cooldown_until = now + self.PUMP_COOLDOWN_S
+            else:
+                was = self._pump_on
+                self._pump_on = False
+                if was:
+                    self._cooldown_until = now + self.PUMP_COOLDOWN_S
             return _base(msg, "uno", True, on=on, seconds=seconds)
         return _err(msg, "uno", "unknown_cmd")
 

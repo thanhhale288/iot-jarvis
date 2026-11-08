@@ -100,21 +100,51 @@ class SerialBridge:
     def request(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not payload.get("id"):
             payload = {**payload, "id": _new_id()}
+        want_id = str(payload["id"])
         self.open()
         assert self._ser is not None
         line = json.dumps(payload, separators=(",", ":")) + "\n"
         self._ser.write(line.encode("utf-8"))
         self._ser.flush()
 
-        raw = self._ser.readline()
-        if not raw:
-            raise TimeoutError(
-                f"timeout {self.timeout}s chờ phản hồi Uno trên {self.port}"
-            )
-        text = raw.decode("utf-8", errors="replace").strip()
-        if not text:
-            raise TimeoutError("nhận dòng trống từ Uno")
-        return json.loads(text)
+        deadline = time.time() + self.timeout
+        last_raw = ""
+        while time.time() < deadline:
+            raw = self._ser.readline()
+            if not raw:
+                continue
+            text = raw.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            last_raw = text
+            if text[0] != "{":
+                # Bỏ log firmware / nhiễu, đợi NDJSON
+                print(f"[serial] skip: {text[:120]}", flush=True)
+                continue
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                print(f"[serial] JSON lỗi: {text[:120]}", flush=True)
+                continue
+            if not isinstance(data, dict):
+                continue
+            # Bỏ event (IR/…) — không phải ACK lệnh
+            if data.get("cmd") == "event":
+                print(
+                    f"[serial] event {data.get('name')} {data.get('code', '')}",
+                    flush=True,
+                )
+                continue
+            if "ok" not in data:
+                continue
+            got = data.get("id")
+            if got is None or str(got) != want_id:
+                continue
+            return data
+        raise TimeoutError(
+            f"timeout {self.timeout}s chờ JSON Uno trên {self.port}"
+            + (f" (cuối: {last_raw[:80]!r})" if last_raw else "")
+        )
 
     def get_env(self, cmd_id: str | None = None) -> dict[str, Any]:
         return self.request(

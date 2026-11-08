@@ -6,6 +6,8 @@ venv/
 .env
 .env.*
 !.env.example
+**/wifi_config.h
+!**/wifi_config.example.h
 
 # Arduino / PlatformIO
 .pio/
